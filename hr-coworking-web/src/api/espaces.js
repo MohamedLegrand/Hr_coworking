@@ -4,7 +4,6 @@ export async function listerEspaces(filtres = {}) {
   const params = {}
   if (filtres.type_espace) params.type_espace = filtres.type_espace
   if (filtres.capacite_min) params.capacite_min = filtres.capacite_min
-  if (filtres.prix_max) params.prix_max = filtres.prix_max
   const { data } = await client.get('/espaces/', { params })
   return data
 }

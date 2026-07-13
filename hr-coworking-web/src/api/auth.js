@@ -1,24 +1,18 @@
 import client from './client'
 
 /**
- * Inscription (multipart/form-data car il y a des fichiers).
+ * Inscription (JSON — les documents KYC sont demandés plus tard, avant la réservation).
  * POST /api/v1/authentification/inscription
  */
 export async function inscrire(donnees) {
-  const formData = new FormData()
-  formData.append('email', donnees.email)
-  formData.append('mot_de_passe', donnees.mot_de_passe)
-  formData.append('nom', donnees.nom)
-  formData.append('prenom', donnees.prenom)
-  formData.append('type_compte', donnees.type_compte)
-  if (donnees.telephone) formData.append('telephone', donnees.telephone)
-  if (donnees.nom_entreprise) formData.append('nom_entreprise', donnees.nom_entreprise)
-  formData.append('cni', donnees.cni)
-  if (donnees.document_entreprise) {
-    formData.append('document_entreprise', donnees.document_entreprise)
-  }
-  const { data } = await client.post('/authentification/inscription', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+  const { data } = await client.post('/authentification/inscription', {
+    email: donnees.email,
+    mot_de_passe: donnees.mot_de_passe,
+    nom: donnees.nom,
+    prenom: donnees.prenom,
+    type_compte: donnees.type_compte,
+    telephone: donnees.telephone || null,
+    nom_entreprise: donnees.nom_entreprise || null,
   })
   return data
 }

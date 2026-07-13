@@ -9,8 +9,9 @@ import useAuthStore from '../../contexte/authStore'
 import { useToast } from '../../contexte/ToastContext'
 import { GuideOnboarding } from '../../composants/communs/GuideOnboarding'
 import ImageEspace from '../../composants/communs/ImageEspace'
-import AlerteSucces from '../../composants/communs/AlerteSucces'
-import AlerteErreur from '../../composants/communs/AlerteErreur'
+import ModaleCguKyc from '../../composants/communs/ModaleCguKyc'
+import AssistantReservation from '../../composants/widgets/AssistantReservation'
+import { libelleGamme } from '../../utilitaires/tarifs'
 import {
   Cloche,
   Fleche,
@@ -21,7 +22,7 @@ import {
   Croix,
   Calendrier,
 } from '../../composants/communs/Icones'
-import { formatFcfa, libelleType, prixAffichage, FILTRES_TYPE } from '../../utilitaires/format'
+import { formatFcfa, libelleType, FILTRES_TYPE } from '../../utilitaires/format'
 import { getErrorMessage, getErrorTitle } from '../../utilitaires/erreurs'
 
 function StatCard({ titre, valeur, description, icon }) {
@@ -64,12 +65,6 @@ function BadgeReservation({ statut }) {
   )
 }
 
-function demainISO() {
-  const d = new Date()
-  d.setDate(d.getDate() + 1)
-  return d.toISOString().slice(0, 10)
-}
-
 export default function PageDashboard() {
   const utilisateur = useAuthStore((s) => s.utilisateur)
   const { success: toastSuccess, error: toastError } = useToast()
@@ -83,18 +78,17 @@ export default function PageDashboard() {
   const creerReservation = useCreerReservation()
 
   const [typeActif, setTypeActif] = useState(null)
-  const [panier, setPanier] = useState([]) // { id, espaceId, dateDebut, quantite }
+  const [panier, setPanier] = useState([]) // Espace[]
+  const [reservationEnAttente, setReservationEnAttente] = useState(null)
 
   const anyError = profilErreur || reservationsErreur || notificationsErreur || espacesErreur || paiementsErreur
 
-  // Afficher les erreurs en toast
   useEffect(() => {
     if (anyError) {
       toastError(getErrorTitle(anyError), getErrorMessage(anyError))
     }
   }, [anyError, toastError])
 
-  // Afficher les erreurs de réservation
   useEffect(() => {
     if (creerReservation.isError) {
       toastError(getErrorTitle(creerReservation.error), getErrorMessage(creerReservation.error))
@@ -122,40 +116,15 @@ export default function PageDashboard() {
   const dernierPaiement = (paiements || [])[0]
 
   const ajouterAuPanier = (espace) => {
-    setPanier((p) => [
-      ...p,
-      { id: crypto.randomUUID(), espaceId: espace.id, dateDebut: demainISO(), quantite: 1 },
-    ])
+    setPanier((p) => (p.some((e) => e.id === espace.id) ? p : [...p, espace]))
   }
-  const retirerDuPanier = (id) => setPanier((p) => p.filter((l) => l.id !== id))
-  const modifierLigne = (id, patch) => setPanier((p) => p.map((l) => (l.id === id ? { ...l, ...patch } : l)))
+  const retirerDuPanier = (espaceId) => setPanier((p) => p.filter((e) => e.id !== espaceId))
 
-  const lignesPanier = useMemo(() => {
-    return panier
-      .map((ligne) => {
-        const espace = espaceParId[ligne.espaceId]
-        if (!espace) return null
-        const { montant, unite } = prixAffichage(espace)
-        const prixUnitaire = montant || 0
-        return { ...ligne, espace, prixUnitaire, unite, total: prixUnitaire * ligne.quantite }
-      })
-      .filter(Boolean)
-  }, [panier, espaceParId])
-
-  const sousTotal = lignesPanier.reduce((s, l) => s + l.total, 0)
-
-  const validerPanier = () => {
-    const details = lignesPanier.map((l) => {
-      const debut = new Date(`${l.dateDebut}T09:00:00`)
-      const fin = new Date(debut)
-      if (l.unite === 'heure') fin.setHours(fin.getHours() + l.quantite)
-      else fin.setDate(fin.getDate() + l.quantite)
-      return { espace_id: l.espace.id, date_debut: debut.toISOString(), date_fin: fin.toISOString() }
-    })
-    creerReservation.mutate(details, {
+  const reserver = (payload) => {
+    creerReservation.mutate(payload, {
       onSuccess: (reservationCreee) => {
         setPanier([])
-        navigate(`/paiements?reservation=${reservationCreee.id}`)
+        setReservationEnAttente(reservationCreee)
       },
     })
   }
@@ -221,7 +190,7 @@ export default function PageDashboard() {
       <div className="mt-10 grid gap-8 xl:grid-cols-[1.5fr_0.9fr]">
         {/* ===== COLONNE CENTRALE ===== */}
         <section className="space-y-8">
-          {/* CATÉGORIES + ESPACES POPULAIRES */}
+          {/* CATÉGORIES + ESPACES DISPONIBLES */}
           <div id="catalogue" className="scroll-mt-8 rounded-2xl border border-ligne bg-white p-8 shadow-sm">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -254,39 +223,40 @@ export default function PageDashboard() {
                   Aucun espace disponible pour ce filtre.
                 </div>
               ) : (
-                espacesFiltres.map((espace) => (
-                  <div key={espace.id} className="overflow-hidden rounded-2xl border border-ligne">
-                    <div className="relative h-32">
-                      <ImageEspace espace={espace} className="h-full w-full object-cover" />
-                      <span className="absolute left-3 top-3 rounded-full bg-violet/90 px-3 py-1 text-[10.5px] font-bold text-white">
-                        {libelleType(espace.type_espace)}
-                      </span>
-                    </div>
-                    <div className="p-4">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-titre text-[15px] font-semibold text-encre">{espace.nom}</p>
-                        <button
-                          type="button"
-                          onClick={() => ajouterAuPanier(espace)}
-                          aria-label={`Ajouter ${espace.nom} au récapitulatif`}
-                          className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-violet text-white shadow transition hover:-translate-y-0.5 hover:bg-violet-fonce"
-                        >
-                          <Plus width={16} height={16} />
-                        </button>
-                      </div>
-                      <div className="mt-1.5 flex items-center gap-1.5 text-[12.5px] text-ardoise">
-                        <Lieu width={13} height={13} />
-                        {espace.localisation || 'Yaoundé'}
-                      </div>
-                      <div className="mt-3">
-                        <span className="font-titre text-[17px] font-bold text-violet">
-                          {formatFcfa(prixAffichage(espace).montant)}
+                espacesFiltres.map((espace) => {
+                  const dejaChoisi = panier.some((e) => e.id === espace.id)
+                  return (
+                    <div key={espace.id} className="overflow-hidden rounded-2xl border border-ligne">
+                      <div className="relative h-32">
+                        <ImageEspace espace={espace} className="h-full w-full object-cover" />
+                        <span className="absolute left-3 top-3 rounded-full bg-violet/90 px-3 py-1 text-[10.5px] font-bold text-white">
+                          {libelleType(espace.type_espace)}
                         </span>
-                        <span className="text-[11.5px] text-ardoise"> /{prixAffichage(espace).unite}</span>
+                      </div>
+                      <div className="p-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-titre text-[15px] font-semibold text-encre">{espace.nom}</p>
+                          <button
+                            type="button"
+                            onClick={() => ajouterAuPanier(espace)}
+                            disabled={dejaChoisi}
+                            aria-label={`Ajouter ${espace.nom} au récapitulatif`}
+                            className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-violet text-white shadow transition hover:-translate-y-0.5 hover:bg-violet-fonce disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Plus width={16} height={16} />
+                          </button>
+                        </div>
+                        <div className="mt-1.5 flex items-center gap-1.5 text-[12.5px] text-ardoise">
+                          <Lieu width={13} height={13} />
+                          {espace.localisation || 'Yaoundé'}
+                        </div>
+                        {dejaChoisi && (
+                          <p className="mt-3 text-[11.5px] font-semibold text-violet">Ajouté au récapitulatif ↓</p>
+                        )}
                       </div>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
           </div>
@@ -323,6 +293,9 @@ export default function PageDashboard() {
                           <p className="mt-2 text-lg font-bold text-encre">
                             {premierEspace?.nom || 'Espace'} • {formatFcfa(reservation.prix_total)}
                           </p>
+                          <p className="mt-1 text-[12.5px] text-ardoise">
+                            {libelleGamme(reservation.gamme)} · {reservation.forfait}
+                          </p>
                         </div>
                         <BadgeReservation statut={reservation.statut} />
                       </div>
@@ -340,91 +313,39 @@ export default function PageDashboard() {
 
         {/* ===== COLONNE LATÉRALE ===== */}
         <aside className="space-y-6">
-          {/* RÉCAPITULATIF / PANIER */}
-          <div className="rounded-2xl border border-ligne bg-white p-6 shadow-sm">
-            <div className="flex items-center justify-between">
+          {/* RÉCAPITULATIF / ASSISTANT DE RÉSERVATION */}
+          <div className="overflow-hidden rounded-2xl border border-ligne bg-white shadow-sm">
+            <div className="flex items-center justify-between p-6 pb-0">
               <span className="font-titre text-lg font-semibold text-encre">Récapitulatif</span>
-              <span className="text-xs text-ardoise">{lignesPanier.length} espace{lignesPanier.length > 1 ? 's' : ''}</span>
+              <span className="text-xs text-ardoise">{panier.length} espace{panier.length > 1 ? 's' : ''}</span>
             </div>
 
-            {creerReservation.isSuccess && (
-              <div className="mt-4"><AlerteSucces message="Réservation créée avec succès." /></div>
-            )}
-            {creerReservation.isError && (
-              <div className="mt-4"><AlerteErreur erreur={creerReservation.error} /></div>
-            )}
-
-            {lignesPanier.length === 0 ? (
-              <p className="mt-6 rounded-2xl bg-slate-50 p-6 text-center text-sm text-slate-600">
+            {panier.length === 0 ? (
+              <p className="m-6 rounded-2xl bg-slate-50 p-6 text-center text-sm text-slate-600">
                 Ajoutez un espace avec le bouton +.
               </p>
             ) : (
-              <div className="mt-5 space-y-4">
-                {lignesPanier.map((ligne) => (
-                  <div key={ligne.id} className="rounded-2xl border border-ligne p-3.5">
-                    <div className="flex items-start justify-between gap-2">
+              <>
+                <div className="space-y-2 p-6 pb-0">
+                  {panier.map((espace) => (
+                    <div key={espace.id} className="flex items-center justify-between gap-2 rounded-xl border border-ligne p-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-encre">{ligne.espace.nom}</p>
-                        <p className="mt-0.5 text-xs text-ardoise">{libelleType(ligne.espace.type_espace)}</p>
+                        <p className="truncate text-sm font-semibold text-encre">{espace.nom}</p>
+                        <p className="text-xs text-ardoise">{libelleType(espace.type_espace)}</p>
                       </div>
                       <button
                         type="button"
-                        onClick={() => retirerDuPanier(ligne.id)}
+                        onClick={() => retirerDuPanier(espace.id)}
                         aria-label="Retirer"
                         className="grid h-7 w-7 flex-none place-items-center rounded-lg bg-lavande text-violet"
                       >
                         <Croix width={13} height={13} />
                       </button>
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <input
-                        type="date"
-                        value={ligne.dateDebut}
-                        min={demainISO()}
-                        onChange={(e) => modifierLigne(ligne.id, { dateDebut: e.target.value })}
-                        className="rounded-lg border border-ligne px-2 py-1.5 text-xs text-encre outline-none focus:border-violet"
-                      />
-                      <div className="flex items-center gap-1.5 rounded-lg border border-ligne px-2 py-1">
-                        <button
-                          type="button"
-                          onClick={() => modifierLigne(ligne.id, { quantite: Math.max(1, ligne.quantite - 1) })}
-                          className="grid h-5 w-5 place-items-center text-violet"
-                        >
-                          −
-                        </button>
-                        <span className="w-14 text-center text-xs font-semibold">
-                          {ligne.quantite} {ligne.unite === 'heure' ? 'h' : 'j'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => modifierLigne(ligne.id, { quantite: ligne.quantite + 1 })}
-                          className="grid h-5 w-5 place-items-center text-violet"
-                        >
-                          +
-                        </button>
-                      </div>
-                      <span className="ml-auto text-sm font-bold text-violet">{formatFcfa(ligne.total)}</span>
-                    </div>
-                  </div>
-                ))}
-
-                <div className="border-t border-dashed border-ligne pt-4">
-                  <div className="flex items-center justify-between">
-                    <span className="font-titre text-base font-semibold text-encre">Total</span>
-                    <span className="font-titre text-xl font-bold text-violet">{formatFcfa(sousTotal)}</span>
-                  </div>
+                  ))}
                 </div>
-
-                <button
-                  type="button"
-                  onClick={validerPanier}
-                  disabled={creerReservation.isPending}
-                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-violet to-violet-fonce px-5 py-3.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {creerReservation.isPending ? 'Envoi…' : 'Valider ma réservation'}
-                  <Fleche width={16} height={16} />
-                </button>
-              </div>
+                <AssistantReservation espaces={panier} onReserver={reserver} chargement={creerReservation.isPending} />
+              </>
             )}
           </div>
 
@@ -489,7 +410,7 @@ export default function PageDashboard() {
           {
             id: 'dashboard_panier',
             titre: '🛒 Vérifier votre sélection',
-            description: 'Consultez les espaces choisis et valider votre réservation. Le paiement se fera ensuite.',
+            description: 'Consultez les espaces choisis, choisissez votre gamme et votre forfait, puis validez. Le paiement se fera ensuite.',
             x: 50,
             y: 75,
           },
@@ -505,6 +426,15 @@ export default function PageDashboard() {
           toastSuccess('✨ Guide terminé', 'Vous pouvez explorer librement maintenant !')
         }}
       />
+
+      {reservationEnAttente && (
+        <ModaleCguKyc
+          reservationId={reservationEnAttente.id}
+          profil={profil}
+          onFermer={() => setReservationEnAttente(null)}
+          onValide={() => navigate(`/paiements?reservation=${reservationEnAttente.id}`)}
+        />
+      )}
     </div>
   )
 }

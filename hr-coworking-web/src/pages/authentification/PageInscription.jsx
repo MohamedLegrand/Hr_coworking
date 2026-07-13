@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import LayoutAuth from '../../composants/mise-en-page/LayoutAuth'
 import ChampTexte from '../../composants/communs/ChampTexte'
-import ChampFichier from '../../composants/communs/ChampFichier'
 import BoutonSoumission from '../../composants/communs/BoutonSoumission'
 import { useInscription } from '../../hooks/useAuth'
 import { useToast } from '../../contexte/ToastContext'
@@ -11,12 +10,9 @@ import { getErrorMessage, getErrorTitle } from '../../utilitaires/erreurs'
 
 export default function PageInscription() {
   const [typeCompte, setTypeCompte] = useState('freelance')
-  const [cni, setCni] = useState(null)
-  const [documentEntreprise, setDocumentEntreprise] = useState(null)
-  const [erreurFichier, setErreurFichier] = useState('')
 
-  const { mutate, isPending, error, isSuccess } = useInscription()
-  const { error: toastError, warning: toastWarning } = useToast()
+  const { mutate, isPending, error } = useInscription()
+  const { error: toastError } = useToast()
 
   const {
     register,
@@ -33,29 +29,10 @@ export default function PageInscription() {
     }
   }, [error, toastError])
 
-  useEffect(() => {
-    if (erreurFichier) {
-      toastWarning('⚠️ Fichier manquant', erreurFichier)
-    }
-  }, [erreurFichier, toastWarning])
-
   const onSubmit = (data) => {
-    setErreurFichier('')
-
-    if (!cni) {
-      setErreurFichier('La CNI est obligatoire.')
-      return
-    }
-    if (typeCompte === 'entreprise' && !documentEntreprise) {
-      setErreurFichier('Le document entreprise est obligatoire.')
-      return
-    }
-
     mutate({
       ...data,
       type_compte: typeCompte,
-      cni,
-      document_entreprise: typeCompte === 'entreprise' ? documentEntreprise : null,
     })
   }
 
@@ -224,31 +201,8 @@ export default function PageInscription() {
                   : false,
               })}
             />
-
-            <ChampFichier
-              label="Document entreprise"
-              nom="document_entreprise"
-              description="RCCM, statuts ou tout justificatif d'existence légale"
-              onChange={setDocumentEntreprise}
-              obligatoire
-            />
           </>
         )}
-
-        {/* Séparateur documents */}
-        <div className="h-px bg-ligne" />
-        <p className="text-[13px] font-semibold text-ardoise">
-          Pièce d'identité
-        </p>
-
-        {/* CNI */}
-        <ChampFichier
-          label="Carte Nationale d'Identité"
-          nom="cni"
-          description="CNI recto-verso ou passeport — PDF, JPG, PNG, max 5 Mo"
-          onChange={setCni}
-          obligatoire
-        />
 
         {/* Mentions légales */}
         <p className="text-[12px] leading-relaxed text-ardoise">
@@ -260,7 +214,8 @@ export default function PageInscription() {
           <a href="#" className="text-violet hover:underline">
             politique de confidentialité
           </a>
-          . Vos documents seront validés par un administrateur sous 24h.
+          . Une pièce d'identité (et un justificatif d'entreprise le cas échéant) vous
+          sera demandée lors de votre première réservation.
         </p>
 
         <BoutonSoumission

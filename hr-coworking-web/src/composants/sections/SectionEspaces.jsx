@@ -3,7 +3,7 @@ import CarteEspace from '../communs/CarteEspace'
 import SqueletteCarteEspace from '../communs/SqueletteCarteEspace'
 import { Check } from '../communs/Icones'
 import { useEspaces } from '../../hooks/useEspaces'
-import { FILTRES_TYPE, prixAffichage } from '../../utilitaires/format'
+import { FILTRES_TYPE } from '../../utilitaires/format'
 
 export default function SectionEspaces() {
   const [type, setType] = useState(null)
@@ -14,9 +14,8 @@ export default function SectionEspaces() {
 
   const espacesTries = useMemo(() => {
     const copie = [...espaces]
-    const prix = (e) => Number(prixAffichage(e).montant ?? 0)
-    if (tri === 'prix-asc') copie.sort((a, b) => prix(a) - prix(b))
-    if (tri === 'prix-desc') copie.sort((a, b) => prix(b) - prix(a))
+    if (tri === 'capacite-desc') copie.sort((a, b) => b.capacite - a.capacite)
+    if (tri === 'nom') copie.sort((a, b) => a.nom.localeCompare(b.nom))
     return copie
   }, [espaces, tri])
 
@@ -66,8 +65,8 @@ export default function SectionEspaces() {
             className="cursor-pointer border-none bg-transparent text-[13px] font-semibold text-encre outline-none"
           >
             <option value="recommande">Recommandés</option>
-            <option value="prix-asc">Prix croissant</option>
-            <option value="prix-desc">Prix décroissant</option>
+            <option value="capacite-desc">Plus grande capacité</option>
+            <option value="nom">Nom (A-Z)</option>
           </select>
         </div>
       </div>

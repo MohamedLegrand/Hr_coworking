@@ -6,7 +6,8 @@ import {
   useReactiverUtilisateur,
 } from '../../hooks/useUtilisateurs'
 import AlerteErreur from '../../composants/communs/AlerteErreur'
-import { Personne, Check, Croix, Boucliers } from '../../composants/communs/Icones'
+import { Personne, Check, Croix, Boucliers, Oeil } from '../../composants/communs/Icones'
+import { urlDocument } from '../../utilitaires/format'
 
 const FILTRES_STATUT = [
   { valeur: null, libelle: 'Tous' },
@@ -15,17 +16,47 @@ const FILTRES_STATUT = [
   { valeur: 'invalide', libelle: 'Refusés' },
 ]
 
+/** Un utilisateur peut avoir document_statut='en_attente' sans avoir encore rien envoyé
+ *  (statut par défaut à l'inscription, avant la vérification KYC pré-réservation). */
+function statutDocumentAffiche(utilisateur) {
+  if (!utilisateur.cni_url && !utilisateur.document_entreprise_url) return 'aucun'
+  return utilisateur.document_statut
+}
+
 function BadgeStatutDocument({ statut }) {
   const palette = {
     valide: 'bg-emerald-100 text-emerald-700',
     en_attente: 'bg-amber-100 text-amber-700',
     invalide: 'bg-red-100 text-red-700',
+    aucun: 'bg-slate-100 text-slate-500',
   }
-  const libelle = { valide: 'Validé', en_attente: 'En attente', invalide: 'Refusé' }
+  const libelle = {
+    valide: 'Validé',
+    en_attente: 'En attente',
+    invalide: 'Refusé',
+    aucun: 'Aucun document',
+  }
   return (
     <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${palette[statut] || 'bg-slate-100 text-slate-600'}`}>
       {libelle[statut] || statut || '—'}
     </span>
+  )
+}
+
+function LienDocument({ href, libelle }) {
+  if (!href) {
+    return <span className="text-[12px] text-ardoise/60">{libelle} — non fourni</span>
+  }
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 text-[12px] font-semibold text-violet hover:underline"
+    >
+      <Oeil width={12} height={12} />
+      Voir {libelle}
+    </a>
   )
 }
 
@@ -131,14 +162,23 @@ export default function PageAdminUtilisateurs() {
                       {u.type_compte === 'entreprise' ? 'Entreprise' : 'Freelance'}
                     </td>
                     <td className="px-5 py-3.5">
-                      <BadgeStatutDocument statut={u.document_statut} />
+                      <BadgeStatutDocument statut={statutDocumentAffiche(u)} />
+                      <div className="mt-2 flex flex-col gap-1">
+                        <LienDocument href={urlDocument(u.cni_url)} libelle="la CNI" />
+                        {u.type_compte === 'entreprise' && (
+                          <LienDocument
+                            href={urlDocument(u.document_entreprise_url)}
+                            libelle="le document entreprise"
+                          />
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-3.5">
                       <BadgeRole role={u.role} />
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center justify-end gap-1.5">
-                        {u.document_statut === 'en_attente' && (
+                        {statutDocumentAffiche(u) === 'en_attente' && (
                           <>
                             <button
                               type="button"

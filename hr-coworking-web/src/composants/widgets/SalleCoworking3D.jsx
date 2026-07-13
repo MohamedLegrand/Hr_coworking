@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
 import * as THREE from 'three'
 import { usePlanSalle } from '../../hooks/usePlanSalle'
+import AssistantReservation from './AssistantReservation'
 
 const COULEURS = {
   disponible: 0x1d9e75,   // vert
@@ -11,23 +12,37 @@ const COULEURS = {
   mur:        0xece8f1,   // ligne
 }
 
-export default function SalleCoworking3D({ onSelection }) {
+/**
+ * Vue 3D de sélection des bureaux (étape 1-2 du parcours de réservation :
+ * découverte + sélection). Une fois un ou plusieurs bureaux choisis,
+ * l'assistant de réservation (gamme → forfait → date → récapitulatif)
+ * s'affiche en dessous — voir AssistantReservation.
+ */
+export default function SalleCoworking3D({ typeCompteUtilisateur, onReserver, chargement }) {
   const conteneurRef = useRef(null)
   const { bureaux, isLoading } = usePlanSalle()
   const [selectionnes, setSelectionnes] = useState([])
   const [survole, setSurvole] = useState(null)
 
-  const etatRef = useRef({ selectionnes: [], survole: null })
+  // Un compte freelance ne peut garder qu'un seul bureau sélectionné : au cas où
+  // plusieurs auraient été choisis avant que le profil (async) ne soit connu.
+  useEffect(() => {
+    if (typeCompteUtilisateur !== 'freelance') return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- ajuste la sélection à une donnée externe (type de compte chargé de façon asynchrone)
+    setSelectionnes((prev) => (prev.length > 1 ? prev.slice(-1) : prev))
+  }, [typeCompteUtilisateur])
+
+  const etatRef = useRef({ selectionnes: [], survole: null, typeCompteUtilisateur })
 
   useEffect(() => {
-    etatRef.current = { selectionnes, survole }
-  }, [selectionnes, survole])
+    etatRef.current = { selectionnes, survole, typeCompteUtilisateur }
+  }, [selectionnes, survole, typeCompteUtilisateur])
 
   useEffect(() => {
     if (isLoading || !conteneurRef.current) return
 
     const conteneur = conteneurRef.current
-    const largeur = conteneur.clientWidth
+    let largeur = conteneur.clientWidth
     const hauteur = 480
 
     // Scène
@@ -155,10 +170,15 @@ export default function SalleCoworking3D({ onSelection }) {
 
       setSelectionnes((prev) => {
         const existe = prev.includes(bureau.numero)
-        const nouveau = existe
-          ? prev.filter((n) => n !== bureau.numero)
-          : [...prev, bureau.numero]
-        onSelection?.(nouveau.map((n) => bureaux.find((b) => b.numero === n)))
+        let nouveau
+        if (existe) {
+          nouveau = prev.filter((n) => n !== bureau.numero)
+        } else if (etatRef.current.typeCompteUtilisateur === 'freelance') {
+          // Un compte freelance ne peut réserver qu'un seul bureau à la fois
+          nouveau = [bureau.numero]
+        } else {
+          nouveau = [...prev, bureau.numero]
+        }
         return nouveau
       })
     }
@@ -191,12 +211,12 @@ export default function SalleCoworking3D({ onSelection }) {
 
     // Responsive
     const onResize = () => {
-      const l = conteneur.clientWidth
-      const a = l / hauteur
+      largeur = conteneur.clientWidth
+      const a = largeur / hauteur
       camera.left = -d * a
       camera.right = d * a
       camera.updateProjectionMatrix()
-      renderer.setSize(l, hauteur)
+      renderer.setSize(largeur, hauteur)
     }
     window.addEventListener('resize', onResize)
 
@@ -217,13 +237,17 @@ export default function SalleCoworking3D({ onSelection }) {
     return <div className="h-[480px] animate-pulse rounded-2xl bg-lavande" />
   }
 
+  const espacesChoisis = selectionnes
+    .map((numero) => bureaux.find((b) => b.numero === numero)?.espace)
+    .filter(Boolean)
+
   return (
     <div className="overflow-hidden rounded-2xl border border-ligne bg-white">
       {/* Vue 3D */}
       <div ref={conteneurRef} className="w-full" />
 
       {/* Légende */}
-      <div className="flex items-center justify-center gap-6 border-t border-ligne px-6 py-4">
+      <div className="flex flex-wrap items-center justify-center gap-6 border-t border-ligne px-6 py-4">
         {[
           { c: 'bg-[#1d9e75]', l: 'Disponible' },
           { c: 'bg-[#e24b4a]', l: 'Occupé' },
@@ -234,28 +258,19 @@ export default function SalleCoworking3D({ onSelection }) {
             {item.l}
           </span>
         ))}
+        {typeCompteUtilisateur === 'freelance' && (
+          <span className="text-[12.5px] font-semibold text-violet">
+            Compte freelance : un seul bureau à la fois
+          </span>
+        )}
       </div>
 
-      {/* Barre de sélection */}
-      {selectionnes.length > 0 && (
-        <div className="flex items-center justify-between border-t border-ligne bg-lavande px-6 py-4">
-          <span className="text-[13.5px] font-semibold text-encre">
-            {selectionnes.length} bureau{selectionnes.length > 1 ? 'x' : ''} sélectionné{selectionnes.length > 1 ? 's' : ''}
-            <span className="ml-2 text-ardoise">
-              (n° {selectionnes.sort((a, b) => a - b).join(', ')})
-            </span>
-          </span>
-          <button
-            onClick={() => {
-              setSelectionnes([])
-              onSelection?.([])
-            }}
-            className="text-[12.5px] font-semibold text-violet hover:text-violet-fonce"
-          >
-            Réinitialiser
-          </button>
-        </div>
-      )}
+      <AssistantReservation
+        espaces={espacesChoisis}
+        onReserver={onReserver}
+        chargement={chargement}
+        onReinitialiser={() => setSelectionnes([])}
+      />
     </div>
   )
 }

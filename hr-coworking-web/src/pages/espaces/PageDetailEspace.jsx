@@ -1,5 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 import { useEspace } from '../../hooks/useEspaces'
+import { useForfaits } from '../../hooks/useReservations'
+import useAuthStore from '../../contexte/authStore'
 import ImageEspace from '../../composants/communs/ImageEspace'
 import {
   Fleche,
@@ -13,7 +15,8 @@ import {
   Projecteur,
   Imprimante,
 } from '../../composants/communs/Icones'
-import { libelleType, formatFcfa, prixAffichage } from '../../utilitaires/format'
+import { libelleType, formatFcfa } from '../../utilitaires/format'
+import { libelleForfait, libelleGamme } from '../../utilitaires/tarifs'
 
 const CARACTERISTIQUES = [
   { icone: Wifi, libelle: 'Connexion internet haut débit' },
@@ -28,6 +31,9 @@ const CARACTERISTIQUES = [
 export default function PageDetailEspace() {
   const { id } = useParams()
   const { data: espace, isLoading, isError } = useEspace(id)
+  const { data: forfaits = [] } = useForfaits()
+  const token = useAuthStore((s) => s.token)
+  const forfaitMoinsCher = forfaits.find((f) => f.gamme === 'standard' && f.forfait === 'heure')
 
   return (
     <div className="mx-auto max-w-[1240px] px-4 pb-20 pt-8 sm:px-7">
@@ -119,11 +125,36 @@ export default function PageDetailEspace() {
 
           {/* Panneau réservation */}
           <aside className="h-fit rounded-2xl border border-ligne bg-white p-7 lg:sticky lg:top-[94px]">
-            <div className="flex items-end gap-1.5">
-              <span className="font-titre text-[32px] font-bold leading-none">
-                {formatFcfa(prixAffichage(espace).montant)}
-              </span>
-              <span className="pb-1 text-[13px] text-ardoise">/{prixAffichage(espace).unite}</span>
+            {forfaitMoinsCher && (
+              <div className="flex items-end gap-1.5">
+                <span className="text-[13px] text-ardoise">À partir de</span>
+                <span className="font-titre text-[28px] font-bold leading-none">
+                  {formatFcfa(forfaitMoinsCher.prix)}
+                </span>
+                <span className="pb-1 text-[13px] text-ardoise">/heure</span>
+              </div>
+            )}
+            <p className="mt-1 text-[12.5px] text-ardoise">
+              Gamme (Standard ou VIP) et forfait (heure, jour, semaine, mois) au choix à la réservation.
+            </p>
+
+            {/* Grille des tarifs de référence */}
+            <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
+              {['standard', 'vip'].map((gamme) => (
+                <div key={gamme}>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ardoise">
+                    {libelleGamme(gamme)}
+                  </p>
+                  <div className="space-y-1">
+                    {forfaits.filter((f) => f.gamme === gamme).map((f) => (
+                      <div key={f.forfait} className="flex items-center justify-between text-[12.5px]">
+                        <span className="text-ardoise">{libelleForfait(f.forfait)}</span>
+                        <span className="font-semibold text-encre">{formatFcfa(f.prix)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
 
             <span
@@ -136,7 +167,7 @@ export default function PageDetailEspace() {
             </span>
 
             <Link
-              to="/connexion"
+              to={token ? '/espaces' : '/connexion'}
               className="mt-6 flex items-center justify-center gap-2.5 rounded-lg bg-violet px-6 py-3.5 text-[15px] font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-violet-fonce"
             >
               Réserver

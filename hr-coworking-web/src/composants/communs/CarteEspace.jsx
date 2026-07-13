@@ -1,10 +1,9 @@
 import { Link } from 'react-router-dom'
 import { Lieu, Etoile, Fleche } from './Icones'
 import ImageEspace from './ImageEspace'
-import { libelleType, formatFcfa, prixAffichage } from '../../utilitaires/format'
+import { libelleType } from '../../utilitaires/format'
 
 export default function CarteEspace({ espace, index = 0 }) {
-  const { montant, unite } = prixAffichage(espace)
   const dispo = espace.est_disponible
   const delai = { animationDelay: `${index * 70}ms` }
 
@@ -51,15 +50,12 @@ export default function CarteEspace({ espace, index = 0 }) {
         <div className="my-4 h-px bg-ligne" />
 
         <div className="flex items-center justify-between">
-          <div>
-            <span className="font-titre text-[23px] font-bold tracking-tight">
-              {formatFcfa(montant)}
-            </span>
-            <span className="text-[12.5px] text-ardoise"> /{unite}</span>
-          </div>
+          <p className="text-[12.5px] text-ardoise">
+            Standard ou VIP,<br />au choix à la réservation.
+          </p>
           <Link
             to={`/espaces/${espace.id}`}
-            className="flex items-center gap-1.5 rounded-md bg-violet px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-violet-fonce"
+            className="flex flex-none items-center gap-1.5 rounded-md bg-violet px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-violet-fonce"
           >
             Réserver
             <Fleche width={15} height={15} />

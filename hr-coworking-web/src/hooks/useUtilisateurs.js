@@ -4,6 +4,7 @@ import {
   modifierProfil,
   changerMotDePasse,
   reuploadDocuments,
+  envoyerVerificationReservation,
   listerTousUtilisateurs,
   validerDocument,
   desactiverUtilisateur,
@@ -37,6 +38,15 @@ export function useReuploadDocuments() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: reuploadDocuments,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['profil'] }),
+  })
+}
+
+/** Acceptation des conditions + dépôt des documents KYC avant réservation. */
+export function useEnvoyerVerificationReservation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: envoyerVerificationReservation,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['profil'] }),
   })
 }

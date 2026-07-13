@@ -11,23 +11,15 @@ import BoutonSoumission from '../../composants/communs/BoutonSoumission'
 import ImageEspace from '../../composants/communs/ImageEspace'
 import AlerteErreur from '../../composants/communs/AlerteErreur'
 import SalleCoworking3D from '../../composants/widgets/SalleCoworking3D'
-import { Plus, Crayon, Corbeille, Fleche } from '../../composants/communs/Icones'
-import { formatFcfa, libelleType, prixAffichage, LIBELLES_TYPE } from '../../utilitaires/format'
+import { Plus, Crayon, Corbeille } from '../../composants/communs/Icones'
+import { libelleType, LIBELLES_TYPE } from '../../utilitaires/format'
 import { getErrorMessage, getErrorTitle } from '../../utilitaires/erreurs'
-
-function demainISO() {
-  const d = new Date()
-  d.setDate(d.getDate() + 1)
-  return d.toISOString().slice(0, 10)
-}
 
 const VALEURS_PAR_DEFAUT = {
   nom: '',
   type_espace: 'bureau_individuel',
   capacite: 1,
   localisation: '',
-  prix_jour: '',
-  prix_heure: '',
 }
 
 export default function PageAdminEspaces() {
@@ -42,7 +34,6 @@ export default function PageAdminEspaces() {
   const [modaleOuverte, setModaleOuverte] = useState(false)
   const [espaceEnEdition, setEspaceEnEdition] = useState(null)
   const [image, setImage] = useState(null)
-  const [bureauxChoisis, setBureauxChoisis] = useState([])
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     defaultValues: VALEURS_PAR_DEFAUT,
@@ -63,8 +54,6 @@ export default function PageAdminEspaces() {
       type_espace: espace.type_espace,
       capacite: espace.capacite,
       localisation: espace.localisation || '',
-      prix_jour: espace.prix_jour ?? '',
-      prix_heure: espace.prix_heure ?? '',
     })
     setModaleOuverte(true)
   }
@@ -75,8 +64,6 @@ export default function PageAdminEspaces() {
     const payload = {
       ...valeurs,
       capacite: Number(valeurs.capacite),
-      prix_jour: valeurs.prix_jour === '' ? null : Number(valeurs.prix_jour),
-      prix_heure: valeurs.prix_heure === '' ? null : Number(valeurs.prix_heure),
       image,
     }
 
@@ -103,21 +90,9 @@ export default function PageAdminEspaces() {
     }
   }
 
-  const espacesChoisis = bureauxChoisis.filter((b) => b.espace).map((b) => b.espace)
-  const totalChoisi = espacesChoisis.reduce((s, e) => s + (prixAffichage(e).montant || 0), 0)
-
-  const reserverDepuisLaVue3D = () => {
-    const debut = new Date(`${demainISO()}T09:00:00`)
-    const fin = new Date(debut)
-    fin.setDate(fin.getDate() + 1)
-    const details = espacesChoisis.map((espace) => ({
-      espace_id: espace.id,
-      date_debut: debut.toISOString(),
-      date_fin: fin.toISOString(),
-    }))
-    creerReservation.mutate(details, {
+  const reserverDepuisLaVue3D = (payload) => {
+    creerReservation.mutate(payload, {
       onSuccess: (reservationCreee) => {
-        setBureauxChoisis([])
         navigate(`/administration/checkout?reservation=${reservationCreee.id}`)
       },
       onError: (err) => toastError(getErrorTitle(err), getErrorMessage(err)),
@@ -134,6 +109,8 @@ export default function PageAdminEspaces() {
           </h1>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-ardoise">
             Créez, modifiez ou retirez des espaces du catalogue, et basculez leur disponibilité.
+            Les bureaux n'ont pas de prix propre : la gamme (standard/VIP) et le forfait sont
+            choisis par le client à la réservation.
           </p>
         </div>
         <button
@@ -154,29 +131,10 @@ export default function PageAdminEspaces() {
         <h2 className="mb-4 font-titre text-lg font-semibold tracking-tight text-encre">
           Vue 3D du plan de salle
         </h2>
-        <SalleCoworking3D onSelection={setBureauxChoisis} />
-
-        {espacesChoisis.length > 0 && (
-          <div className="mt-4 flex flex-col gap-4 rounded-2xl border border-ligne bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-encre">
-                {espacesChoisis.length} bureau{espacesChoisis.length > 1 ? 'x' : ''} sélectionné{espacesChoisis.length > 1 ? 's' : ''}
-              </p>
-              <p className="mt-1 text-sm text-ardoise">
-                Total estimé : <span className="font-semibold text-violet">{formatFcfa(totalChoisi)}</span>
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={reserverDepuisLaVue3D}
-              disabled={creerReservation.isPending}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-violet px-6 py-3 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-violet-fonce disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {creerReservation.isPending ? 'Envoi…' : 'Réserver ces bureaux'}
-              <Fleche width={16} height={16} />
-            </button>
-          </div>
-        )}
+        <SalleCoworking3D
+          onReserver={reserverDepuisLaVue3D}
+          chargement={creerReservation.isPending}
+        />
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -220,12 +178,7 @@ export default function PageAdminEspaces() {
 
                 <p className="mt-1 text-[12.5px] text-ardoise">{espace.localisation || 'Yaoundé'} · {espace.capacite} pl.</p>
 
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="font-titre text-[16px] font-bold text-violet">
-                    {formatFcfa(prixAffichage(espace).montant)}
-                    <span className="text-[11px] font-normal text-ardoise"> /{prixAffichage(espace).unite}</span>
-                  </span>
-
+                <div className="mt-3 flex items-center justify-end">
                   <button
                     type="button"
                     onClick={() => basculerDisponibilite(espace)}
@@ -295,27 +248,6 @@ export default function PageAdminEspaces() {
                 register={register}
                 erreur={errors.localisation}
                 {...register('localisation')}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <ChampTexte
-                label="Prix / jour (FCFA)"
-                nom="prix_jour"
-                type="number"
-                min={0}
-                register={register}
-                erreur={errors.prix_jour}
-                {...register('prix_jour')}
-              />
-              <ChampTexte
-                label="Prix / heure (FCFA)"
-                nom="prix_heure"
-                type="number"
-                min={0}
-                register={register}
-                erreur={errors.prix_heure}
-                {...register('prix_heure')}
               />
             </div>
 

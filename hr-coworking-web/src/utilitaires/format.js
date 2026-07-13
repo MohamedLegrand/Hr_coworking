@@ -51,12 +51,14 @@ export function formatFcfa(montant) {
   return `${new Intl.NumberFormat('fr-FR').format(n)} F`
 }
 
-export function prixAffichage(espace) {
-  if (espace?.prix_jour != null) return { montant: espace.prix_jour, unite: 'jour' }
-  if (espace?.prix_heure != null) return { montant: espace.prix_heure, unite: 'heure' }
-  return { montant: null, unite: 'jour' }
-}
-
 export function libelleType(typeEspace) {
   return LIBELLES_TYPE[typeEspace] || typeEspace
+}
+
+/** URL absolue vers un document uploadé (CNI, justificatif entreprise…). */
+export function urlDocument(cheminRelatif) {
+  if (!cheminRelatif) return null
+  if (cheminRelatif.startsWith('http')) return cheminRelatif
+  const chemin = cheminRelatif.startsWith('/') ? cheminRelatif : `/${cheminRelatif}`
+  return `${ORIGINE_STATIQUE}${chemin}`
 }

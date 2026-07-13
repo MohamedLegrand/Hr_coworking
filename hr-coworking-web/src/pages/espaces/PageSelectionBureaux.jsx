@@ -1,21 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SalleCoworking3D from '../../composants/widgets/SalleCoworking3D'
+import ModaleCguKyc from '../../composants/communs/ModaleCguKyc'
 import { useCreerReservation } from '../../hooks/useReservations'
+import { useProfilComplet } from '../../hooks/useUtilisateurs'
 import { useToast } from '../../contexte/ToastContext'
-import { Fleche } from '../../composants/communs/Icones'
-import { formatFcfa, prixAffichage } from '../../utilitaires/format'
 import { getErrorMessage, getErrorTitle } from '../../utilitaires/erreurs'
 
-function demainISO() {
-  const d = new Date()
-  d.setDate(d.getDate() + 1)
-  return d.toISOString().slice(0, 10)
-}
-
 export default function PageSelectionBureaux() {
-  const [bureauxChoisis, setBureauxChoisis] = useState([])
+  const [reservationEnAttente, setReservationEnAttente] = useState(null)
   const creerReservation = useCreerReservation()
+  const { data: profil } = useProfilComplet()
   const { error: toastError } = useToast()
   const navigate = useNavigate()
 
@@ -25,23 +20,9 @@ export default function PageSelectionBureaux() {
     }
   }, [creerReservation.isError, creerReservation.error, toastError])
 
-  const espacesChoisis = bureauxChoisis.filter((b) => b.espace).map((b) => b.espace)
-  const total = espacesChoisis.reduce((s, e) => s + (prixAffichage(e).montant || 0), 0)
-
-  const reserver = () => {
-    const debut = new Date(`${demainISO()}T09:00:00`)
-    const fin = new Date(debut)
-    fin.setDate(fin.getDate() + 1)
-    const details = espacesChoisis.map((espace) => ({
-      espace_id: espace.id,
-      date_debut: debut.toISOString(),
-      date_fin: fin.toISOString(),
-    }))
-    creerReservation.mutate(details, {
-      onSuccess: (reservationCreee) => {
-        setBureauxChoisis([])
-        navigate(`/paiements?reservation=${reservationCreee.id}`)
-      },
+  const reserver = (payload) => {
+    creerReservation.mutate(payload, {
+      onSuccess: (reservationCreee) => setReservationEnAttente(reservationCreee),
     })
   }
 
@@ -53,33 +34,24 @@ export default function PageSelectionBureaux() {
           Choisissez vos bureaux
         </h1>
         <p className="mt-3 max-w-xl text-sm leading-relaxed text-ardoise">
-          Survolez un bureau disponible pour le mettre en surbrillance et cliquez pour le
-          sélectionner. Vous pouvez en choisir plusieurs.
+          Cliquez sur un bureau disponible pour le sélectionner, choisissez votre gamme, votre
+          forfait et votre date, puis confirmez le récapitulatif.
         </p>
       </div>
 
-      <SalleCoworking3D onSelection={setBureauxChoisis} />
+      <SalleCoworking3D
+        typeCompteUtilisateur={profil?.type_compte}
+        onReserver={reserver}
+        chargement={creerReservation.isPending}
+      />
 
-      {espacesChoisis.length > 0 && (
-        <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-ligne bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-encre">
-              {espacesChoisis.length} bureau{espacesChoisis.length > 1 ? 'x' : ''} sélectionné{espacesChoisis.length > 1 ? 's' : ''}
-            </p>
-            <p className="mt-1 text-sm text-ardoise">
-              Total estimé : <span className="font-semibold text-violet">{formatFcfa(total)}</span>
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={reserver}
-            disabled={creerReservation.isPending}
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-violet px-6 py-3 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-violet-fonce disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {creerReservation.isPending ? 'Envoi…' : 'Réserver ces bureaux'}
-            <Fleche width={16} height={16} />
-          </button>
-        </div>
+      {reservationEnAttente && (
+        <ModaleCguKyc
+          reservationId={reservationEnAttente.id}
+          profil={profil}
+          onFermer={() => setReservationEnAttente(null)}
+          onValide={() => navigate(`/paiements?reservation=${reservationEnAttente.id}`)}
+        />
       )}
     </div>
   )
