@@ -2,7 +2,7 @@
 Endpoints du module authentification.
 """
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -10,10 +10,10 @@ from app.api.v1.modules.authentification import service
 from app.api.v1.modules.authentification.modeles import Utilisateur
 from app.api.v1.modules.authentification.schemas import (
     DemandeMotDePasseOublie,
+    InscriptionEntree,
     MessageReponse,
     ReinitialisationMotDePasse,
     Token,
-    TypeCompte,
     UtilisateurReponse,
 )
 from app.noyau.base_donnees import get_db
@@ -25,31 +25,24 @@ router = APIRouter()
 
 @router.post("/inscription", response_model=UtilisateurReponse, status_code=201)
 def inscription(
-    email: str = Form(...),
-    mot_de_passe: str = Form(...),
-    nom: str = Form(...),
-    prenom: str = Form(...),
-    type_compte: TypeCompte = Form(...),
-    telephone: str | None = Form(None),
-    nom_entreprise: str | None = Form(None),
-    cni: UploadFile = File(..., description="Carte Nationale d'Identité"),
-    document_entreprise: UploadFile | None = File(
-        None, description="RCCM, statuts ou tout justificatif d'entreprise"
-    ),
+    donnees: InscriptionEntree,
     db: Session = Depends(get_db),
 ):
-    """Inscription d'un freelance ou d'une entreprise, documents inclus."""
+    """
+    Inscription d'un freelance ou d'une entreprise.
+    Les documents KYC (CNI, justificatif d'entreprise) et l'acceptation des
+    conditions d'utilisation sont demandés plus tard, avant la première
+    réservation, via POST /utilisateurs/verification-reservation.
+    """
     return service.creer_utilisateur(
         db=db,
-        email=email,
-        mot_de_passe=mot_de_passe,
-        nom=nom,
-        prenom=prenom,
-        type_compte=type_compte.value,
-        telephone=telephone,
-        nom_entreprise=nom_entreprise,
-        cni=cni,
-        document_entreprise=document_entreprise,
+        email=donnees.email,
+        mot_de_passe=donnees.mot_de_passe,
+        nom=donnees.nom,
+        prenom=donnees.prenom,
+        type_compte=donnees.type_compte.value,
+        telephone=donnees.telephone,
+        nom_entreprise=donnees.nom_entreprise,
     )
 
 

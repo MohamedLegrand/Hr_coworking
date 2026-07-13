@@ -58,6 +58,34 @@ def _appeler_api_hrskillspay(
     return {"status": "PENDING", "transaction_id": None}
 
 
+def _verifier_kyc_et_cgu(utilisateur: Utilisateur, reservation: Reservation) -> None:
+    """
+    Garde-fou serveur avant tout paiement : KYC présent (statut valide ou
+    en_attente, pas manquant ni refusé) et CGU acceptées sur CETTE
+    réservation précise. Les admins ne sont pas des clients coworking et
+    sont exemptés (cf. outil de réservation manuelle en administration).
+    """
+    if utilisateur.role == "admin":
+        return
+
+    kyc_manquant_ou_refuse = (
+        not utilisateur.cni_url
+        or utilisateur.document_statut == "invalide"
+        or (utilisateur.type_compte == "entreprise" and not utilisateur.document_entreprise_url)
+    )
+    if kyc_manquant_ou_refuse:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Vos documents d'identification (KYC) sont manquants ou refusés. "
+            "Complétez-les avant de payer.",
+        )
+    if not reservation.cgu_acceptees:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Vous devez accepter les conditions d'utilisation de cette réservation avant de payer.",
+        )
+
+
 def initier_paiement(
     db: Session,
     utilisateur_id: str,
@@ -89,6 +117,9 @@ def initier_paiement(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cette réservation est déjà confirmée et payée.",
         )
+
+    utilisateur = db.query(Utilisateur).filter(Utilisateur.id == utilisateur_id).first()
+    _verifier_kyc_et_cgu(utilisateur, reservation)
 
     paiement_existant = (
         db.query(Paiement)

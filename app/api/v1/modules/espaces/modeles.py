@@ -4,7 +4,7 @@ Modèle SQLAlchemy de la table `espaces`.
 
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.noyau.base_donnees import Base
@@ -17,8 +17,6 @@ class Espace(Base):
     nom = Column(String(100), nullable=False)
     type_espace = Column(String(30), nullable=False)
     capacite = Column(Integer, nullable=False, default=1)
-    prix_heure = Column(Numeric(15, 2), nullable=True)
-    prix_jour = Column(Numeric(15, 2), nullable=True)
     description = Column(Text, nullable=True)
     localisation = Column(String(150), nullable=True)
     image_url = Column(String(255), nullable=True)

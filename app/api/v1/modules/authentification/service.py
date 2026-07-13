@@ -2,9 +2,9 @@
 Logique métier du module authentification.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
-from fastapi import HTTPException, UploadFile, status
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.v1.modules.authentification.modeles import Utilisateur
@@ -16,16 +16,8 @@ from app.noyau.securite import (
     hash_password,
     verifier_password,
 )
-from app.noyau.utilitaires_fichiers import sauvegarder_fichier
 
-EXTENSIONS_AUTORISEES = {".pdf", ".jpg", ".jpeg", ".png"}
 DUREE_TOKEN_RESET_MINUTES = 15
-
-
-def _sauvegarder_fichier(fichier: UploadFile) -> str:
-    return sauvegarder_fichier(
-        fichier, settings.UPLOAD_DOCUMENTS_DIR, EXTENSIONS_AUTORISEES
-    )
 
 
 def creer_utilisateur(
@@ -35,11 +27,13 @@ def creer_utilisateur(
     nom: str,
     prenom: str,
     type_compte: str,
-    cni: UploadFile,
     telephone: str | None = None,
     nom_entreprise: str | None = None,
-    document_entreprise: UploadFile | None = None,
 ) -> Utilisateur:
+    """
+    Crée le compte sans documents : le KYC est demandé plus tard, et les CGU
+    sont acceptées à chaque réservation (POST /reservations/{id}/valider-cgu-kyc).
+    """
     if db.query(Utilisateur).filter(Utilisateur.email == email).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -52,22 +46,11 @@ def creer_utilisateur(
             detail="Le mot de passe doit contenir au moins 8 caractères.",
         )
 
-    if type_compte == "entreprise":
-        if not nom_entreprise:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Le nom de l'entreprise est obligatoire pour un compte entreprise.",
-            )
-        if document_entreprise is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Le document entreprise est obligatoire pour un compte entreprise.",
-            )
-
-    cni_url = _sauvegarder_fichier(cni)
-    document_entreprise_url = (
-        _sauvegarder_fichier(document_entreprise) if document_entreprise else None
-    )
+    if type_compte == "entreprise" and not nom_entreprise:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Le nom de l'entreprise est obligatoire pour un compte entreprise.",
+        )
 
     nouvel_utilisateur = Utilisateur(
         email=email,
@@ -77,10 +60,7 @@ def creer_utilisateur(
         telephone=telephone,
         type_compte=type_compte,
         nom_entreprise=nom_entreprise if type_compte == "entreprise" else None,
-        cni_url=cni_url,
-        document_entreprise_url=document_entreprise_url,
         document_statut="en_attente",
-        document_date_upload=datetime.now(timezone.utc),
     )
 
     db.add(nouvel_utilisateur)

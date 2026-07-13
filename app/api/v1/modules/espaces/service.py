@@ -1,9 +1,12 @@
 """
 Logique métier du module espaces : consultation publique et
 administration du catalogue de bureaux.
-"""
 
-from decimal import Decimal
+Le bureau est une ressource physique (nom, type, capacité, localisation,
+photo, disponibilité) — il n'a pas de prix propre. Le prix dépend
+uniquement du forfait (gamme x durée) choisi par le client à la
+réservation, voir reservations/forfaits.py.
+"""
 
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
@@ -25,7 +28,6 @@ def lister_espaces_disponibles(
     db: Session,
     type_espace: str | None = None,
     capacite_min: int | None = None,
-    prix_max: Decimal | None = None,
 ) -> list[Espace]:
     requete = db.query(Espace).filter(Espace.est_disponible == True)  # noqa: E712
 
@@ -33,8 +35,6 @@ def lister_espaces_disponibles(
         requete = requete.filter(Espace.type_espace == type_espace)
     if capacite_min is not None:
         requete = requete.filter(Espace.capacite >= capacite_min)
-    if prix_max is not None:
-        requete = requete.filter(Espace.prix_jour <= prix_max)
 
     return requete.order_by(Espace.nom).all()
 
@@ -58,8 +58,6 @@ def creer_espace(
     nom: str,
     type_espace: str,
     capacite: int,
-    prix_heure: Decimal | None,
-    prix_jour: Decimal | None,
     description: str | None,
     localisation: str | None,
     image: UploadFile | None,
@@ -68,7 +66,7 @@ def creer_espace(
 
     nouvel_espace = Espace(
         nom=nom, type_espace=type_espace, capacite=capacite,
-        prix_heure=prix_heure, prix_jour=prix_jour, description=description,
+        description=description,
         localisation=localisation, image_url=image_url, est_disponible=True,
     )
 
@@ -108,8 +106,6 @@ def modifier_espace(
     nom: str | None = None,
     type_espace: str | None = None,
     capacite: int | None = None,
-    prix_heure: Decimal | None = None,
-    prix_jour: Decimal | None = None,
     description: str | None = None,
     localisation: str | None = None,
     est_disponible: bool | None = None,
@@ -123,10 +119,6 @@ def modifier_espace(
         espace.type_espace = type_espace
     if capacite is not None:
         espace.capacite = capacite
-    if prix_heure is not None:
-        espace.prix_heure = prix_heure
-    if prix_jour is not None:
-        espace.prix_jour = prix_jour
     if description is not None:
         espace.description = description
     if localisation is not None:

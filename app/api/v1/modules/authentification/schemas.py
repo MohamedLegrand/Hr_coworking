@@ -25,6 +25,18 @@ class StatutDocument(str, Enum):
     invalide = "invalide"
 
 
+class InscriptionEntree(BaseModel):
+    """Corps JSON attendu par POST /inscription (plus de documents à ce stade)."""
+
+    email: EmailStr
+    mot_de_passe: str
+    nom: str
+    prenom: str
+    type_compte: TypeCompte
+    telephone: str | None = None
+    nom_entreprise: str | None = None
+
+
 class UtilisateurReponse(BaseModel):
     """Ce que l'API renvoie après inscription, connexion, ou pour /moi."""
 

@@ -2,8 +2,6 @@
 Endpoints du module espaces.
 """
 
-from decimal import Decimal
-
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.orm import Session
 
@@ -19,12 +17,11 @@ router = APIRouter()
 def lister_espaces(
     type_espace: TypeEspace | None = Query(None),
     capacite_min: int | None = Query(None, ge=1),
-    prix_max: Decimal | None = Query(None, ge=0),
     db: Session = Depends(get_db),
 ):
     return service.lister_espaces_disponibles(
         db, type_espace=type_espace.value if type_espace else None,
-        capacite_min=capacite_min, prix_max=prix_max,
+        capacite_min=capacite_min,
     )
 
 
@@ -46,8 +43,6 @@ def creer_espace(
     nom: str = Form(...),
     type_espace: TypeEspace = Form(...),
     capacite: int = Form(...),
-    prix_heure: Decimal | None = Form(None),
-    prix_jour: Decimal | None = Form(None),
     description: str | None = Form(None),
     localisation: str | None = Form(None),
     image: UploadFile | None = File(None),
@@ -56,8 +51,7 @@ def creer_espace(
 ):
     return service.creer_espace(
         db, nom=nom, type_espace=type_espace.value, capacite=capacite,
-        prix_heure=prix_heure, prix_jour=prix_jour, description=description,
-        localisation=localisation, image=image,
+        description=description, localisation=localisation, image=image,
     )
 
 
@@ -80,8 +74,6 @@ def modifier_espace(
     nom: str | None = Form(None),
     type_espace: TypeEspace | None = Form(None),
     capacite: int | None = Form(None),
-    prix_heure: Decimal | None = Form(None),
-    prix_jour: Decimal | None = Form(None),
     description: str | None = Form(None),
     localisation: str | None = Form(None),
     est_disponible: bool | None = Form(None),
@@ -92,7 +84,6 @@ def modifier_espace(
     return service.modifier_espace(
         db, espace_id, nom=nom,
         type_espace=type_espace.value if type_espace else None,
-        capacite=capacite, prix_heure=prix_heure, prix_jour=prix_jour,
-        description=description, localisation=localisation,
+        capacite=capacite, description=description, localisation=localisation,
         est_disponible=est_disponible, image=image,
     )

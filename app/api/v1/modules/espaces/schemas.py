@@ -1,10 +1,12 @@
 """
 Schémas Pydantic du module espaces.
+
+Le bureau n'a pas de prix propre : le prix dépend du forfait (gamme x durée)
+choisi par le client à la réservation — voir reservations/forfaits.py.
 """
 
 import uuid
 from datetime import datetime
-from decimal import Decimal
 from enum import Enum
 
 from pydantic import BaseModel
@@ -21,8 +23,6 @@ class EspaceReponse(BaseModel):
     nom: str
     type_espace: TypeEspace
     capacite: int
-    prix_heure: Decimal | None = None
-    prix_jour: Decimal | None = None
     description: str | None = None
     localisation: str | None = None
     image_url: str | None = None

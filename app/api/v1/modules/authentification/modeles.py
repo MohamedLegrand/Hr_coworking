@@ -26,7 +26,7 @@ class Utilisateur(Base):
         nullable=False,
         default="membre",
     )
-    cni_url = Column(Text, nullable=False)
+    cni_url = Column(Text, nullable=True)
     document_entreprise_url = Column(Text, nullable=True)
     document_statut = Column(
         Enum("en_attente", "valide", "invalide", name="statut_document"),

@@ -4,23 +4,40 @@ Logique métier du module reservations.
 Règles métier clés :
 - Freelance : 1 seul bureau par réservation
 - Entreprise : plusieurs bureaux autorisés en une seule transaction
+- La gamme est un choix du client, pas une propriété du bureau (pour le
+  moment, seule la gamme standard existe) ; le prix est un forfait fixe
+  (gamme x durée), jamais une multiplication durée x tarif — voir forfaits.py
 - Vérification des chevauchements de dates par bureau
-- Calcul automatique du prix selon la durée (heure vs journée)
 - Statut initial : en_attente (confirmee après paiement)
+- Les CGU sont acceptées à chaque réservation (pas au niveau du compte) et
+  le KYC (documents du compte) est vérifié juste avant le paiement, pas à
+  la création de la réservation — voir valider_cgu_kyc() et le module
+  paiements pour le garde-fou avant paiement
 - Annulation → notification envoyée à l'utilisateur
 """
 
+import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.v1.modules.authentification.modeles import Utilisateur
 from app.api.v1.modules.espaces.modeles import Espace
 from app.api.v1.modules.notifications.service import notifier_annulation_reservation
+from app.api.v1.modules.reservations.forfaits import calculer_date_fin, obtenir_forfait
 from app.api.v1.modules.reservations.modeles import Reservation, ReservationDetail
-from app.api.v1.modules.reservations.schemas import DetailReservationEntree
+from app.noyau.configuration import settings
+from app.noyau.utilitaires_fichiers import sauvegarder_fichier
+
+EXTENSIONS_DOCUMENTS_AUTORISEES = {".pdf", ".jpg", ".jpeg", ".png"}
+
+
+def _sauvegarder_document(fichier: UploadFile) -> str:
+    return sauvegarder_fichier(
+        fichier, settings.UPLOAD_DOCUMENTS_DIR, EXTENSIONS_DOCUMENTS_AUTORISEES
+    )
 
 
 def _verifier_chevauchement(
@@ -49,67 +66,60 @@ def _verifier_chevauchement(
         )
 
 
-def _calculer_prix(
-    espace: Espace,
-    date_debut: datetime,
-    date_fin: datetime,
-) -> Decimal:
-    duree_heures = (date_fin - date_debut).total_seconds() / 3600
-    if duree_heures >= 8 and espace.prix_jour is not None:
-        nombre_jours = max(1, round(duree_heures / 8))
-        return Decimal(str(espace.prix_jour)) * nombre_jours
-    if espace.prix_heure is not None:
-        return Decimal(str(espace.prix_heure)) * Decimal(str(round(duree_heures, 2)))
-    return Decimal("0")
-
-
 def creer_reservation(
     db: Session,
     utilisateur,
-    details: list[DetailReservationEntree],
+    espace_ids: list[uuid.UUID],
+    gamme: str,
+    forfait: str,
+    date_debut: datetime,
 ) -> Reservation:
-    if utilisateur.type_compte == "freelance" and len(details) > 1:
+    """
+    Crée la réservation avec le statut 'en_attente', sans vérifier le KYC
+    ni les CGU (ces vérifications interviennent juste avant le paiement).
+    Le prix est le forfait fixe (gamme, forfait), appliqué à chaque bureau.
+    """
+    if utilisateur.type_compte == "freelance" and len(espace_ids) > 1:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Un compte freelance ne peut réserver qu'un seul bureau à la fois.",
         )
 
-    prix_total = Decimal("0")
-    items = []
+    donnees_forfait = obtenir_forfait(gamme, forfait)
+    prix_unitaire = Decimal(str(donnees_forfait["prix"]))
+    date_fin = calculer_date_fin(date_debut, forfait)
 
-    for detail in details:
+    items = []
+    for espace_id in espace_ids:
         espace = db.query(Espace).filter(
-            Espace.id == str(detail.espace_id),
+            Espace.id == str(espace_id),
             Espace.est_disponible == True,  # noqa: E712
         ).first()
 
         if not espace:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"L'espace {detail.espace_id} est introuvable ou indisponible.",
+                detail=f"L'espace {espace_id} est introuvable ou indisponible.",
             )
 
         _verifier_chevauchement(
-            db,
-            espace_id=str(detail.espace_id),
-            date_debut=detail.date_debut,
-            date_fin=detail.date_fin,
+            db, espace_id=str(espace_id), date_debut=date_debut, date_fin=date_fin,
         )
 
-        prix = _calculer_prix(espace, detail.date_debut, detail.date_fin)
-        prix_total += prix
-
         items.append(ReservationDetail(
-            espace_id=detail.espace_id,
-            date_debut=detail.date_debut,
-            date_fin=detail.date_fin,
-            prix=prix,
+            espace_id=espace_id,
+            date_debut=date_debut,
+            date_fin=date_fin,
+            prix=prix_unitaire,
         ))
 
     nouvelle_reservation = Reservation(
         utilisateur_id=utilisateur.id,
         statut="en_attente",
-        prix_total=prix_total,
+        gamme=gamme,
+        forfait=forfait,
+        prix_total=prix_unitaire * len(items),
+        cgu_acceptees=False,
     )
     db.add(nouvelle_reservation)
     db.flush()
@@ -121,6 +131,83 @@ def creer_reservation(
     db.commit()
     db.refresh(nouvelle_reservation)
     return nouvelle_reservation
+
+
+def valider_cgu_kyc(
+    db: Session,
+    utilisateur: Utilisateur,
+    reservation_id: str,
+    cgu_acceptees: bool,
+    cni: UploadFile | None = None,
+    document_entreprise: UploadFile | None = None,
+) -> Reservation:
+    """
+    Étape obligatoire avant le paiement d'une réservation : acceptation des
+    CGU (tracée sur la réservation, horodatée) + dépôt des documents KYC si
+    manquants ou refusés. Les documents déjà fournis et non refusés
+    (statut valide ou en_attente) ne sont pas redemandés.
+    """
+    reservation = obtenir_reservation(db, reservation_id, str(utilisateur.id))
+
+    if not cgu_acceptees:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vous devez accepter les conditions d'utilisation.",
+        )
+
+    if document_entreprise is not None:
+        if utilisateur.type_compte != "entreprise":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Le document entreprise ne s'applique qu'aux comptes entreprise.",
+            )
+        utilisateur.document_entreprise_url = _sauvegarder_document(document_entreprise)
+
+    if cni is not None:
+        utilisateur.cni_url = _sauvegarder_document(cni)
+
+    if cni is not None or document_entreprise is not None:
+        utilisateur.document_statut = "en_attente"
+        utilisateur.document_date_upload = datetime.now(timezone.utc)
+
+    kyc_manquant_ou_refuse = not utilisateur.cni_url or utilisateur.document_statut == "invalide"
+    if kyc_manquant_ou_refuse:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="La photo de votre CNI est obligatoire (document manquant ou refusé).",
+        )
+    if utilisateur.type_compte == "entreprise" and not utilisateur.document_entreprise_url:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Le document entreprise est obligatoire.",
+        )
+
+    reservation.cgu_acceptees = True
+    reservation.date_acceptation_cgu = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(reservation)
+    return reservation
+
+
+def lister_espaces_indisponibles(
+    db: Session,
+    debut: datetime,
+    fin: datetime,
+) -> list[str]:
+    """Espaces déjà pris (en_attente/confirmée) sur la période [debut, fin]."""
+    lignes = (
+        db.query(ReservationDetail.espace_id)
+        .join(Reservation)
+        .filter(
+            Reservation.statut.in_(["en_attente", "confirmee"]),
+            ReservationDetail.date_debut < fin,
+            ReservationDetail.date_fin > debut,
+        )
+        .distinct()
+        .all()
+    )
+    return [ligne[0] for ligne in lignes]
 
 
 def lister_mes_reservations(db: Session, utilisateur_id: str) -> list[Reservation]:
