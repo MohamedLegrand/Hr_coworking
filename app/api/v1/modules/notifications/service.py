@@ -22,29 +22,38 @@ def _envoyer_email(destinataire: str, sujet: str, contenu: str) -> None:
     TODO (production) :
         import sendgrid  # ou smtplib, mailjet_rest, etc.
         # Envoyer un vrai email au destinataire
+
+    Un simple print() de log ne doit jamais faire échouer la requête HTTP
+    qui l'a déclenché (la notification est déjà enregistrée en base à ce
+    stade) — certaines consoles (cp1252 sous Windows) ne savent pas encoder
+    tous les emojis utilisés dans les sujets, d'où le garde-fou ci-dessous.
     """
-    print(
-        f"[EMAIL] À : {destinataire} | "
-        f"Sujet : {sujet} | "
-        f"Contenu : {contenu[:80]}..."
-    )
+    message = f"[EMAIL] À : {destinataire} | Sujet : {sujet} | Contenu : {contenu[:80]}..."
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        print(message.encode("ascii", errors="replace").decode("ascii"))
 
 
 def creer_notification(
     db: Session,
     utilisateur_id: str,
     type_notification: str,
+    titre: str,
     contenu: str,
     email_destinataire: str | None = None,
     sujet_email: str | None = None,
 ) -> Notification:
     """
     Crée une notification en base ET envoie un email si les infos
-    de destinataire sont fournies.
+    de destinataire sont fournies. Le titre seul est affiché dans les
+    listes/menus déroulants ; le contenu complet n'apparaît que sur la
+    page dédiée (GET /notifications/mes-notifications).
     """
     nouvelle_notification = Notification(
         utilisateur_id=utilisateur_id,
         type=type_notification,
+        titre=titre,
         contenu=contenu,
         est_lu=False,
     )
@@ -75,6 +84,7 @@ def notifier_confirmation_reservation(
         db,
         utilisateur_id=utilisateur_id,
         type_notification="confirmation",
+        titre="✅ Réservation confirmée",
         contenu=contenu,
         email_destinataire=email_utilisateur,
         sujet_email="✅ Réservation confirmée — HR Coworking",
@@ -96,6 +106,7 @@ def notifier_annulation_reservation(
         db,
         utilisateur_id=utilisateur_id,
         type_notification="annulation",
+        titre="❌ Réservation annulée",
         contenu=contenu,
         email_destinataire=email_utilisateur,
         sujet_email="❌ Réservation annulée — HR Coworking",
@@ -120,10 +131,78 @@ def notifier_reinitialisation_mot_de_passe(
         db,
         utilisateur_id=utilisateur_id,
         type_notification="rappel",
+        titre="🔐 Réinitialisation de mot de passe",
         contenu=contenu,
         email_destinataire=email_utilisateur,
         sujet_email="🔐 Réinitialisation de mot de passe — HR Coworking",
     )
+
+
+def notifier_creation_reservation(
+    db: Session,
+    utilisateur_id: str,
+    email_utilisateur: str,
+    reservation_id: str,
+    gamme: str,
+    forfait: str,
+    nombre_bureaux: int,
+    prix_total: str,
+) -> None:
+    """Appelé par le module reservations juste après la création (avant paiement)."""
+    contenu = (
+        f"Votre réservation #{str(reservation_id)[:8].upper()} a été enregistrée : "
+        f"{nombre_bureaux} bureau{'x' if nombre_bureaux > 1 else ''}, "
+        f"formule {gamme} — {forfait}. Montant total : {prix_total} XAF. "
+        f"Elle reste en attente tant que le paiement n'est pas finalisé."
+    )
+    creer_notification(
+        db,
+        utilisateur_id=utilisateur_id,
+        type_notification="reservation_creee",
+        titre="🗓️ Réservation créée",
+        contenu=contenu,
+        email_destinataire=email_utilisateur,
+        sujet_email="🗓️ Réservation créée — HR Coworking",
+    )
+
+
+def notifier_admins_paiement_recu(
+    db: Session,
+    reservation_id: str,
+    gamme: str,
+    forfait: str,
+    nombre_bureaux: int,
+    prix_total: str,
+    operateur: str,
+    numero_telephone: str | None,
+    client_nom: str,
+    client_prenom: str,
+    client_email: str,
+) -> None:
+    """
+    Appelé par le module paiements après un webhook SUCCESS.
+    Notifie tous les administrateurs qu'un client vient de payer une réservation.
+    """
+    from app.api.v1.modules.authentification.modeles import Utilisateur
+
+    contenu = (
+        f"Le client {client_prenom} {client_nom} ({client_email}) vient d'effectuer "
+        f"un paiement pour la réservation #{str(reservation_id)[:8].upper()} : "
+        f"{nombre_bureaux} bureau{'x' if nombre_bureaux > 1 else ''}, "
+        f"formule {gamme} — {forfait}. Montant : {prix_total} XAF. "
+        f"Paiement via {operateur}"
+        + (f" ({numero_telephone})." if numero_telephone else ".")
+    )
+
+    admins = db.query(Utilisateur).filter(Utilisateur.role == "admin").all()
+    for admin in admins:
+        creer_notification(
+            db,
+            utilisateur_id=str(admin.id),
+            type_notification="paiement_recu",
+            titre="💰 Nouveau paiement reçu",
+            contenu=contenu,
+        )
 
 
 def lister_mes_notifications(

@@ -25,7 +25,10 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.modules.authentification.modeles import Utilisateur
 from app.api.v1.modules.espaces.modeles import Espace
-from app.api.v1.modules.notifications.service import notifier_annulation_reservation
+from app.api.v1.modules.notifications.service import (
+    notifier_annulation_reservation,
+    notifier_creation_reservation,
+)
 from app.api.v1.modules.reservations.forfaits import calculer_date_fin, obtenir_forfait
 from app.api.v1.modules.reservations.modeles import Reservation, ReservationDetail
 from app.noyau.configuration import settings
@@ -130,6 +133,18 @@ def creer_reservation(
 
     db.commit()
     db.refresh(nouvelle_reservation)
+
+    notifier_creation_reservation(
+        db,
+        utilisateur_id=str(utilisateur.id),
+        email_utilisateur=utilisateur.email,
+        reservation_id=str(nouvelle_reservation.id),
+        gamme=gamme,
+        forfait=forfait,
+        nombre_bureaux=len(items),
+        prix_total=str(nouvelle_reservation.prix_total),
+    )
+
     return nouvelle_reservation
 
 

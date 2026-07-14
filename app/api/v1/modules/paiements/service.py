@@ -16,7 +16,10 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.v1.modules.authentification.modeles import Utilisateur
-from app.api.v1.modules.notifications.service import notifier_confirmation_reservation
+from app.api.v1.modules.notifications.service import (
+    notifier_admins_paiement_recu,
+    notifier_confirmation_reservation,
+)
 from app.api.v1.modules.paiements.modeles import Paiement
 from app.api.v1.modules.reservations.modeles import Reservation
 from app.api.v1.modules.reservations.service import confirmer_reservation
@@ -194,7 +197,7 @@ def traiter_webhook(db: Session, payload: dict) -> dict:
     paiement.montant_net = Decimal(str(payload.get("net_amount", paiement.montant)))
 
     if nouveau_statut == "SUCCESS":
-        confirmer_reservation(db, str(paiement.reservation_id))
+        reservation = confirmer_reservation(db, str(paiement.reservation_id))
 
         utilisateur = db.query(Utilisateur).filter(
             Utilisateur.id == paiement.utilisateur_id
@@ -207,6 +210,19 @@ def traiter_webhook(db: Session, payload: dict) -> dict:
                 email_utilisateur=utilisateur.email,
                 reservation_id=str(paiement.reservation_id),
                 prix_total=str(paiement.montant_net or paiement.montant),
+            )
+            notifier_admins_paiement_recu(
+                db,
+                reservation_id=str(paiement.reservation_id),
+                gamme=reservation.gamme,
+                forfait=reservation.forfait,
+                nombre_bureaux=len(reservation.details),
+                prix_total=str(paiement.montant_net or paiement.montant),
+                operateur=paiement.operateur,
+                numero_telephone=paiement.numero_telephone,
+                client_nom=utilisateur.nom,
+                client_prenom=utilisateur.prenom,
+                client_email=utilisateur.email,
             )
 
     db.commit()
