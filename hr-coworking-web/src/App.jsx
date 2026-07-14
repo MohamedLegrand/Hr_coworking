@@ -15,10 +15,10 @@ import PageDashboard from './pages/dashboard/PageDashboard'
 import PageConnexion from './pages/authentification/PageConnexion'
 import PageInscription from './pages/authentification/PageInscription'
 import PageMotDePasseOublie from './pages/authentification/PageMotDePasseOublie'
-import PageEnConstruction from './composants/communs/PageEnConstruction'
 import PageSelectionBureaux from './pages/espaces/PageSelectionBureaux'
 import PageMesReservations from './pages/reservations/PageMesReservations'
 import PagePaiement from './pages/paiements/PagePaiement'
+import PageNotifications from './pages/notifications/PageNotifications'
 import PageAdminAccueil from './pages/administration/PageAdminAccueil'
 import PageAdminEspaces from './pages/administration/PageAdminEspaces'
 import PageAdminUtilisateurs from './pages/administration/PageAdminUtilisateurs'
@@ -120,7 +120,7 @@ function AppRoutes() {
         <Route path="/espaces" element={<PageSelectionBureaux />} />
         <Route path="/reservations" element={<PageMesReservations />} />
         <Route path="/paiements" element={<PagePaiement />} />
-        <Route path="/notifications" element={<PageEnConstruction titre="Mes notifications" />} />
+        <Route path="/notifications" element={<PageNotifications />} />
       </Route>
 
       {/* ───── ESPACE ADMIN — sidebar dédiée, réservé au rôle admin ───── */}
@@ -130,6 +130,7 @@ function AppRoutes() {
         <Route path="espaces" element={<PageAdminEspaces />} />
         <Route path="reservations" element={<PageAdminReservations />} />
         <Route path="paiements" element={<PageAdminPaiements />} />
+        <Route path="notifications" element={<PageNotifications />} />
         <Route path="checkout" element={<PagePaiement />} />
       </Route>
 

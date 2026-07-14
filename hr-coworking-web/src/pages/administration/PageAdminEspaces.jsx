@@ -20,6 +20,7 @@ const VALEURS_PAR_DEFAUT = {
   type_espace: 'bureau_individuel',
   capacite: 1,
   localisation: '',
+  visible_plan_3d: true,
 }
 
 export default function PageAdminEspaces() {
@@ -54,6 +55,7 @@ export default function PageAdminEspaces() {
       type_espace: espace.type_espace,
       capacite: espace.capacite,
       localisation: espace.localisation || '',
+      visible_plan_3d: espace.visible_plan_3d,
     })
     setModaleOuverte(true)
   }
@@ -64,6 +66,7 @@ export default function PageAdminEspaces() {
     const payload = {
       ...valeurs,
       capacite: Number(valeurs.capacite),
+      visible_plan_3d: Boolean(valeurs.visible_plan_3d),
       image,
     }
 
@@ -178,7 +181,16 @@ export default function PageAdminEspaces() {
 
                 <p className="mt-1 text-[12.5px] text-ardoise">{espace.localisation || 'Yaoundé'} · {espace.capacite} pl.</p>
 
-                <div className="mt-3 flex items-center justify-end">
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  {espace.visible_plan_3d ? (
+                    <span className="rounded-full bg-lavande px-3 py-1.5 text-[11px] font-bold text-violet">
+                      Plan 3D
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-500">
+                      Catalogue seul
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={() => basculerDisponibilite(espace)}
@@ -250,6 +262,21 @@ export default function PageAdminEspaces() {
                 {...register('localisation')}
               />
             </div>
+
+            <label className="flex cursor-pointer items-start gap-2.5">
+              <input
+                type="checkbox"
+                {...register('visible_plan_3d')}
+                className="mt-0.5 h-4 w-4 accent-violet"
+              />
+              <span className="text-[13.5px] text-encre">
+                <span className="font-semibold">Visible dans le plan 3D</span>
+                <span className="block text-[12px] text-ardoise">
+                  Occupe l'un des 8 emplacements physiques. Décochez pour un bureau réservable
+                  uniquement depuis le catalogue (cartes).
+                </span>
+              </span>
+            </label>
 
             <ChampFichier
               label="Photo du bureau"

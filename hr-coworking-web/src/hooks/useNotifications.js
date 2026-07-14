@@ -15,11 +15,16 @@ export function useNotifications(nonLuesSeules = true) {
   })
 }
 
+function invaliderNotifications(queryClient) {
+  // Invalide les deux variantes (non-lues seulement / toutes) en une fois.
+  queryClient.invalidateQueries({ queryKey: ['notifications'] })
+}
+
 export function useMarquerNotificationLue() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: marquerNotificationLue,
-    onSuccess: () => queryClient.invalidateQueries(['notifications', true]),
+    onSuccess: () => invaliderNotifications(queryClient),
   })
 }
 
@@ -27,7 +32,7 @@ export function useMarquerToutNotifications() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: marquerToutNotifications,
-    onSuccess: () => queryClient.invalidateQueries(['notifications', true]),
+    onSuccess: () => invaliderNotifications(queryClient),
   })
 }
 
@@ -35,7 +40,7 @@ export function useSupprimerNotification() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: supprimerNotification,
-    onSuccess: () => queryClient.invalidateQueries(['notifications', true]),
+    onSuccess: () => invaliderNotifications(queryClient),
   })
 }
 
@@ -43,6 +48,6 @@ export function useViderNotifications() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: viderNotifications,
-    onSuccess: () => queryClient.invalidateQueries(['notifications', true]),
+    onSuccess: () => invaliderNotifications(queryClient),
   })
 }

@@ -1,6 +1,7 @@
 import { NavLink, Outlet, Link } from 'react-router-dom'
 import useAuthStore from '../../contexte/authStore'
-import { Grille, Bureau, Personne, Calendrier, CartePaiement, Boucliers } from '../communs/Icones'
+import ClocheNotifications from '../communs/ClocheNotifications'
+import { Grille, Bureau, Personne, Calendrier, CartePaiement, Cloche, Boucliers } from '../communs/Icones'
 
 const NAV_ADMIN = [
   { to: '/administration', label: "Vue d'ensemble", icon: Grille, fin: true },
@@ -8,6 +9,7 @@ const NAV_ADMIN = [
   { to: '/administration/utilisateurs', label: 'Utilisateurs', icon: Personne, fin: true },
   { to: '/administration/reservations', label: 'Réservations', icon: Calendrier, fin: true },
   { to: '/administration/paiements', label: 'Paiements', icon: CartePaiement, fin: true },
+  { to: '/administration/notifications', label: 'Notifications', icon: Cloche, fin: true },
 ]
 
 function initiales(utilisateur) {
@@ -85,6 +87,10 @@ export default function LayoutAdmin() {
 
       {/* ============= CONTENU ============= */}
       <div className="min-w-0 flex-1">
+        <div className="mb-5 hidden justify-end lg:flex">
+          <ClocheNotifications lien="/administration/notifications" />
+        </div>
+
         <div className="mb-5 flex items-center justify-between gap-3 lg:hidden">
           <Link to="/administration" className="flex items-center gap-2.5 text-encre">
             <img
@@ -94,9 +100,12 @@ export default function LayoutAdmin() {
             />
             <span className="font-titre text-base font-bold tracking-tight">HR Coworking · Admin</span>
           </Link>
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-violet text-sm font-bold text-white">
-            {initiales(utilisateur)}
-          </span>
+          <div className="flex items-center gap-3">
+            <ClocheNotifications lien="/administration/notifications" />
+            <span className="grid h-11 w-11 place-items-center rounded-full bg-violet text-sm font-bold text-white">
+              {initiales(utilisateur)}
+            </span>
+          </div>
         </div>
 
         {/* Nav mobile (sidebar cachée sous lg) */}

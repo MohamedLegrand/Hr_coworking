@@ -1,6 +1,10 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useMemo } from 'react'
 import * as THREE from 'three'
 import { usePlanSalle } from '../../hooks/usePlanSalle'
+import { useForfaits, useIndisponibilites } from '../../hooks/useReservations'
+import { useToast } from '../../contexte/ToastContext'
+import { formatFcfa } from '../../utilitaires/format'
+import { libelleForfait } from '../../utilitaires/tarifs'
 import AssistantReservation from './AssistantReservation'
 
 const COULEURS = {
@@ -21,8 +25,49 @@ const COULEURS = {
 export default function SalleCoworking3D({ typeCompteUtilisateur, onReserver, chargement }) {
   const conteneurRef = useRef(null)
   const { bureaux, isLoading } = usePlanSalle()
+  const { data: forfaits = [] } = useForfaits()
   const [selectionnes, setSelectionnes] = useState([])
   const [survole, setSurvole] = useState(null)
+  const { warning: toastWarning } = useToast()
+
+  // Fenêtre large (maintenant → +1 an) pour détecter tout bureau déjà réservé
+  // (en_attente ou confirmée), quelle que soit la période exacte de la
+  // réservation — un bureau réservé doit apparaître occupé dès qu'on revient
+  // sur le plan, pas seulement au moment de choisir une période précise.
+  const { debutFenetre, finFenetre } = useMemo(() => {
+    const maintenant = new Date()
+    const dans1An = new Date(maintenant)
+    dans1An.setFullYear(dans1An.getFullYear() + 1)
+    return { debutFenetre: maintenant, finFenetre: dans1An }
+  }, [])
+  const { data: indisponibles = [] } = useIndisponibilites(debutFenetre, finFenetre)
+
+  const bureauxAvecDisponibilite = useMemo(() => {
+    return bureaux.map((bureau) => ({
+      ...bureau,
+      disponible: bureau.disponible && !(bureau.espace && indisponibles.includes(bureau.espace.id)),
+    }))
+  }, [bureaux, indisponibles])
+
+  // Désélectionne automatiquement un bureau qui vient d'être réservé par
+  // quelqu'un d'autre pendant que l'utilisateur consultait le plan.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- ajuste la sélection à une donnée externe (disponibilité réelle des bureaux)
+    setSelectionnes((prev) => {
+      const encoreValides = prev.filter((numero) => {
+        const bureau = bureauxAvecDisponibilite.find((b) => b.numero === numero)
+        return bureau?.disponible
+      })
+      if (encoreValides.length !== prev.length) {
+        toastWarning(
+          '⚠️ Bureau indisponible',
+          'Un ou plusieurs bureaux sélectionnés viennent d\'être réservés et ont été retirés.'
+        )
+      }
+      return encoreValides
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bureauxAvecDisponibilite])
 
   // Un compte freelance ne peut garder qu'un seul bureau sélectionné : au cas où
   // plusieurs auraient été choisis avant que le profil (async) ne soit connu.
@@ -91,7 +136,7 @@ export default function SalleCoworking3D({ typeCompteUtilisateur, onReserver, ch
     // Groupe de bureaux (chaque bureau = un groupe cliquable)
     const meshBureaux = []
 
-    bureaux.forEach((bureau) => {
+    bureauxAvecDisponibilite.forEach((bureau) => {
       const groupe = new THREE.Group()
       groupe.position.set(bureau.position.x, 0, bureau.position.z)
 
@@ -231,14 +276,14 @@ export default function SalleCoworking3D({ typeCompteUtilisateur, onReserver, ch
         conteneur.removeChild(renderer.domElement)
       }
     }
-  }, [isLoading, bureaux])
+  }, [isLoading, bureauxAvecDisponibilite])
 
   if (isLoading) {
     return <div className="h-[480px] animate-pulse rounded-2xl bg-lavande" />
   }
 
   const espacesChoisis = selectionnes
-    .map((numero) => bureaux.find((b) => b.numero === numero)?.espace)
+    .map((numero) => bureauxAvecDisponibilite.find((b) => b.numero === numero)?.espace)
     .filter(Boolean)
 
   return (
@@ -264,6 +309,27 @@ export default function SalleCoworking3D({ typeCompteUtilisateur, onReserver, ch
           </span>
         )}
       </div>
+
+      {/* Légende des tarifs — les prix ne s'appliquent qu'ici, dans le plan 3D */}
+      {forfaits.length > 0 && (
+        <div className="flex flex-wrap items-center justify-center gap-3 border-t border-ligne bg-lavande/40 px-6 py-3.5">
+          <span className="text-[12px] font-semibold uppercase tracking-wide text-ardoise">Tarifs</span>
+          {forfaits.map((f) => (
+            <span
+              key={`${f.gamme}-${f.forfait}`}
+              className="inline-flex items-center gap-1.5 rounded-full border border-ligne bg-white px-3 py-1 text-[12px] font-medium text-encre"
+            >
+              {libelleForfait(f.forfait)}
+              <span className="font-bold text-violet">{formatFcfa(f.prix)}</span>
+              {f.meilleure_valeur && (
+                <span className="rounded-full bg-violet px-1.5 py-0.5 text-[9px] font-bold text-white">
+                  Meilleure valeur
+                </span>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
 
       <AssistantReservation
         espaces={espacesChoisis}
