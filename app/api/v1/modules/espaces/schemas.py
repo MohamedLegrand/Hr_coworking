@@ -27,7 +27,6 @@ class EspaceReponse(BaseModel):
     localisation: str | None = None
     image_url: str | None = None
     est_disponible: bool
-    visible_plan_3d: bool
     date_creation: datetime
 
     model_config = {"from_attributes": True}

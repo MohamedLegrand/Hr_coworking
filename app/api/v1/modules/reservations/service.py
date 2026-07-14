@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.api.v1.modules.authentification.modeles import Utilisateur
 from app.api.v1.modules.espaces.modeles import Espace
 from app.api.v1.modules.notifications.service import (
+    notifier_admins_creation_reservation,
     notifier_annulation_reservation,
     notifier_creation_reservation,
 )
@@ -93,6 +94,7 @@ def creer_reservation(
     date_fin = calculer_date_fin(date_debut, forfait)
 
     items = []
+    noms_bureaux = []
     for espace_id in espace_ids:
         espace = db.query(Espace).filter(
             Espace.id == str(espace_id),
@@ -109,6 +111,7 @@ def creer_reservation(
             db, espace_id=str(espace_id), date_debut=date_debut, date_fin=date_fin,
         )
 
+        noms_bureaux.append(espace.nom)
         items.append(ReservationDetail(
             espace_id=espace_id,
             date_debut=date_debut,
@@ -145,6 +148,16 @@ def creer_reservation(
         prix_total=str(nouvelle_reservation.prix_total),
     )
 
+    notifier_admins_creation_reservation(
+        db,
+        reservation_id=str(nouvelle_reservation.id),
+        noms_bureaux=noms_bureaux,
+        date_debut=date_debut,
+        date_fin=date_fin,
+        client_nom=utilisateur.nom,
+        client_prenom=utilisateur.prenom,
+    )
+
     return nouvelle_reservation
 
 
@@ -153,21 +166,24 @@ def valider_cgu_kyc(
     utilisateur: Utilisateur,
     reservation_id: str,
     cgu_acceptees: bool,
-    cni: UploadFile | None = None,
+    cni_recto: UploadFile | None = None,
+    cni_verso: UploadFile | None = None,
+    photo_identite: UploadFile | None = None,
     document_entreprise: UploadFile | None = None,
 ) -> Reservation:
     """
     Étape obligatoire avant le paiement d'une réservation : acceptation des
-    CGU (tracée sur la réservation, horodatée) + dépôt des documents KYC si
-    manquants ou refusés. Les documents déjà fournis et non refusés
-    (statut valide ou en_attente) ne sont pas redemandés.
+    conditions proposées par HR-SKILLS SARL (tracée sur la réservation,
+    horodatée) + dépôt des documents KYC si manquants ou refusés (CNI recto,
+    CNI verso, photo de la personne qui réserve). Les documents déjà fournis
+    et non refusés (statut valide ou en_attente) ne sont pas redemandés.
     """
     reservation = obtenir_reservation(db, reservation_id, str(utilisateur.id))
 
     if not cgu_acceptees:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Vous devez accepter les conditions d'utilisation.",
+            detail="Vous devez accepter les conditions d'utilisation proposées par HR-SKILLS SARL.",
         )
 
     if document_entreprise is not None:
@@ -178,18 +194,27 @@ def valider_cgu_kyc(
             )
         utilisateur.document_entreprise_url = _sauvegarder_document(document_entreprise)
 
-    if cni is not None:
-        utilisateur.cni_url = _sauvegarder_document(cni)
+    if cni_recto is not None:
+        utilisateur.cni_recto_url = _sauvegarder_document(cni_recto)
+    if cni_verso is not None:
+        utilisateur.cni_verso_url = _sauvegarder_document(cni_verso)
+    if photo_identite is not None:
+        utilisateur.photo_identite_url = _sauvegarder_document(photo_identite)
 
-    if cni is not None or document_entreprise is not None:
+    if cni_recto is not None or cni_verso is not None or photo_identite is not None or document_entreprise is not None:
         utilisateur.document_statut = "en_attente"
         utilisateur.document_date_upload = datetime.now(timezone.utc)
 
-    kyc_manquant_ou_refuse = not utilisateur.cni_url or utilisateur.document_statut == "invalide"
+    kyc_manquant_ou_refuse = (
+        not utilisateur.cni_recto_url
+        or not utilisateur.cni_verso_url
+        or not utilisateur.photo_identite_url
+        or utilisateur.document_statut == "invalide"
+    )
     if kyc_manquant_ou_refuse:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="La photo de votre CNI est obligatoire (document manquant ou refusé).",
+            detail="La CNI (recto et verso) et votre photo sont obligatoires (document manquant ou refusé).",
         )
     if utilisateur.type_compte == "entreprise" and not utilisateur.document_entreprise_url:
         raise HTTPException(
@@ -209,20 +234,22 @@ def lister_espaces_indisponibles(
     db: Session,
     debut: datetime,
     fin: datetime,
-) -> list[str]:
-    """Espaces déjà pris (en_attente/confirmée) sur la période [debut, fin]."""
-    lignes = (
-        db.query(ReservationDetail.espace_id)
+) -> list[ReservationDetail]:
+    """
+    Détails (bureau, période) des réservations déjà prises (en_attente/confirmée)
+    qui chevauchent [debut, fin] — permet d'afficher au client la période exacte
+    d'occupation et l'heure à partir de laquelle le bureau redevient libre.
+    """
+    return (
+        db.query(ReservationDetail)
         .join(Reservation)
         .filter(
             Reservation.statut.in_(["en_attente", "confirmee"]),
             ReservationDetail.date_debut < fin,
             ReservationDetail.date_fin > debut,
         )
-        .distinct()
         .all()
     )
-    return [ligne[0] for ligne in lignes]
 
 
 def lister_mes_reservations(db: Session, utilisateur_id: str) -> list[Reservation]:

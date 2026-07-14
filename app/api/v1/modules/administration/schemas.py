@@ -36,7 +36,9 @@ class UtilisateurAdminReponse(BaseModel):
     role: str
     document_statut: StatutDocument
     document_entreprise_url: str | None = None
-    cni_url: str | None = None
+    cni_recto_url: str | None = None
+    cni_verso_url: str | None = None
+    photo_identite_url: str | None = None
     document_date_upload: datetime | None = None
     date_creation: datetime
     est_actif: bool

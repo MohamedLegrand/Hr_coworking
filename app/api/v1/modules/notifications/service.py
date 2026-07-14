@@ -166,6 +166,40 @@ def notifier_creation_reservation(
     )
 
 
+def notifier_admins_creation_reservation(
+    db: Session,
+    reservation_id: str,
+    noms_bureaux: list[str],
+    date_debut,
+    date_fin,
+    client_nom: str,
+    client_prenom: str,
+) -> None:
+    """
+    Appelé par le module reservations juste après la création (avant paiement).
+    Notifie tous les administrateurs qu'un bureau vient d'être réservé,
+    en précisant la période concernée.
+    """
+    from app.api.v1.modules.authentification.modeles import Utilisateur
+
+    periode = f"du {date_debut.strftime('%d/%m/%Y %H:%M')} au {date_fin.strftime('%d/%m/%Y %H:%M')}"
+    bureaux = ", ".join(noms_bureaux)
+    contenu = (
+        f"{client_prenom} {client_nom} vient de réserver {bureaux} "
+        f"({periode}). Réservation #{str(reservation_id)[:8].upper()} en attente de paiement."
+    )
+
+    admins = db.query(Utilisateur).filter(Utilisateur.role == "admin").all()
+    for admin in admins:
+        creer_notification(
+            db,
+            utilisateur_id=str(admin.id),
+            type_notification="reservation_creee",
+            titre="🗓️ Bureau réservé",
+            contenu=contenu,
+        )
+
+
 def notifier_admins_paiement_recu(
     db: Session,
     reservation_id: str,

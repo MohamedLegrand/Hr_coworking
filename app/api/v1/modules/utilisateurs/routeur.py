@@ -68,7 +68,9 @@ def changer_mot_de_passe(
 
 @router.post("/documents", response_model=ProfilReponse)
 def re_uploader_documents(
-    cni: UploadFile | None = File(None, description="Carte Nationale d'Identité"),
+    cni_recto: UploadFile | None = File(None, description="Carte Nationale d'Identité — recto"),
+    cni_verso: UploadFile | None = File(None, description="Carte Nationale d'Identité — verso"),
+    photo_identite: UploadFile | None = File(None, description="Photo de la personne qui réserve"),
     document_entreprise: UploadFile | None = File(
         None, description="RCCM, statuts ou tout justificatif d'entreprise"
     ),
@@ -82,6 +84,8 @@ def re_uploader_documents(
     """
     return service.re_uploader_documents(
         db, utilisateur,
-        cni=cni,
+        cni_recto=cni_recto,
+        cni_verso=cni_verso,
+        photo_identite=photo_identite,
         document_entreprise=document_entreprise,
     )

@@ -12,6 +12,7 @@ from app.api.v1.modules.reservations import service
 from app.api.v1.modules.reservations.forfaits import lister_forfaits
 from app.api.v1.modules.reservations.schemas import (
     ForfaitReponse,
+    IndisponibiliteReponse,
     ReservationCreation,
     ReservationReponse,
 )
@@ -58,7 +59,9 @@ def creer_reservation(
 def valider_cgu_kyc(
     reservation_id: uuid.UUID,
     cgu_acceptees: bool = Form(...),
-    cni: UploadFile | None = File(None, description="Carte Nationale d'Identité"),
+    cni_recto: UploadFile | None = File(None, description="Carte Nationale d'Identité — recto"),
+    cni_verso: UploadFile | None = File(None, description="Carte Nationale d'Identité — verso"),
+    photo_identite: UploadFile | None = File(None, description="Photo de la personne qui réserve"),
     document_entreprise: UploadFile | None = File(
         None, description="RCCM, statuts ou tout justificatif d'entreprise"
     ),
@@ -66,30 +69,33 @@ def valider_cgu_kyc(
     utilisateur=Depends(get_utilisateur_courant),
 ):
     """
-    Étape obligatoire avant le paiement : acceptation des CGU (tracée sur
-    cette réservation précise, horodatée) + dépôt des documents KYC si
-    manquants ou refusés. Si les documents sont déjà fournis et non
-    refusés, cni/document_entreprise peuvent être omis.
+    Étape obligatoire avant le paiement : acceptation des conditions
+    proposées par HR-SKILLS SARL (tracée sur cette réservation précise,
+    horodatée) + dépôt des documents KYC si manquants ou refusés. Si les
+    documents sont déjà fournis et non refusés, les fichiers peuvent être omis.
     """
     return service.valider_cgu_kyc(
         db, utilisateur,
         reservation_id=str(reservation_id),
         cgu_acceptees=cgu_acceptees,
-        cni=cni,
+        cni_recto=cni_recto,
+        cni_verso=cni_verso,
+        photo_identite=photo_identite,
         document_entreprise=document_entreprise,
     )
 
 
-@router.get("/indisponibilites", response_model=list[uuid.UUID])
+@router.get("/indisponibilites", response_model=list[IndisponibiliteReponse])
 def indisponibilites(
     debut: datetime = Query(...),
     fin: datetime = Query(...),
     db: Session = Depends(get_db),
 ):
     """
-    Liste les espaces déjà réservés (en_attente ou confirmée) qui chevauchent
-    la période donnée. Utilisé par le sélecteur de bureaux pour griser en
-    temps réel les places indisponibles sur le créneau choisi.
+    Liste les bureaux déjà réservés (en_attente ou confirmée) qui chevauchent
+    la période donnée, avec la période exacte d'occupation. Utilisé par le
+    sélecteur de bureaux pour griser en temps réel les places indisponibles
+    et préciser au client quand un bureau redevient libre.
     """
     return service.lister_espaces_indisponibles(db, debut, fin)
 

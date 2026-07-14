@@ -61,6 +61,15 @@ class ValidationCguKycEntree(BaseModel):
     cgu_acceptees: bool
 
 
+class IndisponibiliteReponse(BaseModel):
+    """Période exacte d'occupation d'un bureau déjà réservé sur le créneau demandé."""
+    espace_id: uuid.UUID
+    date_debut: datetime
+    date_fin: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class DetailReservationReponse(BaseModel):
     id: uuid.UUID
     espace_id: uuid.UUID

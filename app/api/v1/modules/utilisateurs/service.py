@@ -79,14 +79,16 @@ def changer_mot_de_passe(
 def re_uploader_documents(
     db: Session,
     utilisateur: Utilisateur,
-    cni: UploadFile | None = None,
+    cni_recto: UploadFile | None = None,
+    cni_verso: UploadFile | None = None,
+    photo_identite: UploadFile | None = None,
     document_entreprise: UploadFile | None = None,
 ) -> Utilisateur:
     """
     Re-soumet un ou plusieurs documents pour re-validation.
     Repasse automatiquement le statut à 'en_attente'.
     """
-    if cni is None and document_entreprise is None:
+    if cni_recto is None and cni_verso is None and photo_identite is None and document_entreprise is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Au moins un document doit être fourni.",
@@ -100,8 +102,12 @@ def re_uploader_documents(
             )
         utilisateur.document_entreprise_url = _sauvegarder_document(document_entreprise)
 
-    if cni is not None:
-        utilisateur.cni_url = _sauvegarder_document(cni)
+    if cni_recto is not None:
+        utilisateur.cni_recto_url = _sauvegarder_document(cni_recto)
+    if cni_verso is not None:
+        utilisateur.cni_verso_url = _sauvegarder_document(cni_verso)
+    if photo_identite is not None:
+        utilisateur.photo_identite_url = _sauvegarder_document(photo_identite)
 
     utilisateur.document_statut = "en_attente"
     utilisateur.document_date_upload = datetime.now(timezone.utc)

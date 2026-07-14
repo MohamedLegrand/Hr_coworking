@@ -72,7 +72,9 @@ def _verifier_kyc_et_cgu(utilisateur: Utilisateur, reservation: Reservation) -> 
         return
 
     kyc_manquant_ou_refuse = (
-        not utilisateur.cni_url
+        not utilisateur.cni_recto_url
+        or not utilisateur.cni_verso_url
+        or not utilisateur.photo_identite_url
         or utilisateur.document_statut == "invalide"
         or (utilisateur.type_compte == "entreprise" and not utilisateur.document_entreprise_url)
     )

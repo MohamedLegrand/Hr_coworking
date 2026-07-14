@@ -21,8 +21,4 @@ class Espace(Base):
     localisation = Column(String(150), nullable=True)
     image_url = Column(String(255), nullable=True)
     est_disponible = Column(Boolean, nullable=False, default=True)
-    # Contrôle l'affichage dans le plan 3D (8 emplacements fixes), indépendant
-    # du catalogue général (liste de cartes filtrable) où tous les bureaux
-    # disponibles apparaissent toujours.
-    visible_plan_3d = Column(Boolean, nullable=False, default=True)
     date_creation = Column(DateTime(timezone=True), server_default=func.now())

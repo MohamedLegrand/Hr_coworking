@@ -45,15 +45,13 @@ def creer_espace(
     capacite: int = Form(...),
     description: str | None = Form(None),
     localisation: str | None = Form(None),
-    visible_plan_3d: bool = Form(True),
     image: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     _admin=Depends(get_administrateur_courant),
 ):
     return service.creer_espace(
         db, nom=nom, type_espace=type_espace.value, capacite=capacite,
-        description=description, localisation=localisation,
-        visible_plan_3d=visible_plan_3d, image=image,
+        description=description, localisation=localisation, image=image,
     )
 
 
@@ -79,7 +77,6 @@ def modifier_espace(
     description: str | None = Form(None),
     localisation: str | None = Form(None),
     est_disponible: bool | None = Form(None),
-    visible_plan_3d: bool | None = Form(None),
     image: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     _admin=Depends(get_administrateur_courant),
@@ -88,5 +85,5 @@ def modifier_espace(
         db, espace_id, nom=nom,
         type_espace=type_espace.value if type_espace else None,
         capacite=capacite, description=description, localisation=localisation,
-        est_disponible=est_disponible, visible_plan_3d=visible_plan_3d, image=image,
+        est_disponible=est_disponible, image=image,
     )

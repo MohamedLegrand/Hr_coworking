@@ -61,7 +61,6 @@ def creer_espace(
     description: str | None,
     localisation: str | None,
     image: UploadFile | None,
-    visible_plan_3d: bool = True,
 ) -> Espace:
     image_url = _sauvegarder_image(image) if image else None
 
@@ -69,7 +68,6 @@ def creer_espace(
         nom=nom, type_espace=type_espace, capacite=capacite,
         description=description,
         localisation=localisation, image_url=image_url, est_disponible=True,
-        visible_plan_3d=visible_plan_3d,
     )
 
     db.add(nouvel_espace)
@@ -111,7 +109,6 @@ def modifier_espace(
     description: str | None = None,
     localisation: str | None = None,
     est_disponible: bool | None = None,
-    visible_plan_3d: bool | None = None,
     image: UploadFile | None = None,
 ) -> Espace:
     espace = obtenir_espace(db, espace_id)
@@ -128,8 +125,6 @@ def modifier_espace(
         espace.localisation = localisation
     if est_disponible is not None:
         espace.est_disponible = est_disponible
-    if visible_plan_3d is not None:
-        espace.visible_plan_3d = visible_plan_3d
     if image is not None:
         espace.image_url = _sauvegarder_image(image)
 
