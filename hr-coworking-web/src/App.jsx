@@ -12,9 +12,11 @@ import LayoutAdmin from './composants/mise-en-page/LayoutAdmin'
 import PageAccueil from './pages/espaces/PageAccueil'
 import PageDetailEspace from './pages/espaces/PageDetailEspace'
 import PageDashboard from './pages/dashboard/PageDashboard'
+import PageProfil from './pages/profil/PageProfil'
 import PageConnexion from './pages/authentification/PageConnexion'
 import PageInscription from './pages/authentification/PageInscription'
 import PageMotDePasseOublie from './pages/authentification/PageMotDePasseOublie'
+import PageReinitialiserMotDePasse from './pages/authentification/PageReinitialiserMotDePasse'
 import PageSelectionBureaux from './pages/espaces/PageSelectionBureaux'
 import PageMesReservations from './pages/reservations/PageMesReservations'
 import PagePaiement from './pages/paiements/PagePaiement'
@@ -117,6 +119,7 @@ function AppRoutes() {
       {/* ───── ESPACE MEMBRE — sidebar dédiée, jamais d'accès admin ───── */}
       <Route element={<RouteMembre><LayoutMembre /></RouteMembre>}>
         <Route path="/profil" element={<PageDashboard />} />
+        <Route path="/parametres" element={<PageProfil />} />
         <Route path="/espaces" element={<PageSelectionBureaux />} />
         <Route path="/reservations" element={<PageMesReservations />} />
         <Route path="/paiements" element={<PagePaiement />} />
@@ -138,7 +141,7 @@ function AppRoutes() {
       <Route path="/connexion" element={<PageConnexion />} />
       <Route path="/inscription" element={<PageInscription />} />
       <Route path="/mot-de-passe-oublie" element={<PageMotDePasseOublie />} />
-      <Route path="/reinitialiser-mot-de-passe" element={<div>Réinitialisation — à créer</div>} />
+      <Route path="/reinitialiser-mot-de-passe" element={<PageReinitialiserMotDePasse />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

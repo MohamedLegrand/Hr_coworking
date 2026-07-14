@@ -17,6 +17,8 @@ const LIBELLES_TYPE = {
   rappel: '🔐 Rappel',
   reservation_creee: '🗓️ Réservation',
   paiement_recu: '💰 Paiement',
+  document_valide: '✅ Documents',
+  document_refuse: '❌ Documents',
 }
 
 /**

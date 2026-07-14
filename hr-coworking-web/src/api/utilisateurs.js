@@ -23,23 +23,6 @@ export async function changerMotDePasse(payload) {
   return data
 }
 
-/**
- * Validation préalable à la réservation : acceptation des conditions d'utilisation
- * de l'espace + dépôt des documents KYC (CNI pour un freelance, justificatif
- * d'entreprise en plus pour une entreprise).
- */
-export async function envoyerVerificationReservation({ conditionsAcceptees, cni, documentEntreprise }) {
-  const formData = new FormData()
-  formData.append('conditions_acceptees', conditionsAcceptees ? 'true' : 'false')
-  if (cni) formData.append('cni', cni)
-  if (documentEntreprise) formData.append('document_entreprise', documentEntreprise)
-
-  const { data } = await client.post('/utilisateurs/verification-reservation', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
-  return data
-}
-
 export async function reuploadDocuments({ cniRecto, cniVerso, photoIdentite, documentEntreprise }) {
   const formData = new FormData()
   if (cniRecto) formData.append('cni_recto', cniRecto)

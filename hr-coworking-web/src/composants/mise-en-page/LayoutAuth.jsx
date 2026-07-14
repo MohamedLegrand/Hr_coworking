@@ -52,6 +52,14 @@ export default function LayoutAuth({ children, titre, sousTitre }) {
         </div>
 
         <div className="mx-auto w-full max-w-[440px]">
+          <Link
+            to="/"
+            className="mb-6 inline-flex items-center gap-2 text-[13.5px] font-semibold text-ardoise transition-colors hover:text-violet"
+          >
+            <span aria-hidden="true">←</span>
+            Retour à l'accueil
+          </Link>
+
           {/* En-tête formulaire */}
           <div className="mb-8">
             <h1 className="font-titre text-[clamp(26px,3.5vw,32px)] font-bold leading-tight tracking-tight">

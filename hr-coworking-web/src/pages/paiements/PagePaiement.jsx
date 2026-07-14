@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMesReservations, useReservation } from '../../hooks/useReservations'
 import { useEspaces } from '../../hooks/useEspaces'
 import { useInitierPaiement } from '../../hooks/usePaiements'
+import { useProfilComplet } from '../../hooks/useUtilisateurs'
 import { useToast } from '../../contexte/ToastContext'
 import useAuthStore from '../../contexte/authStore'
+import ModaleCguKyc from '../../composants/communs/ModaleCguKyc'
 import { Telephone, CartePaiement, Check, Fleche, Calendrier } from '../../composants/communs/Icones'
 import { formatFcfa } from '../../utilitaires/format'
 import { getErrorMessage, getErrorTitle } from '../../utilitaires/erreurs'
@@ -45,6 +47,7 @@ const METHODES = [
 export default function PagePaiement() {
   const [searchParams] = useSearchParams()
   const reservationId = searchParams.get('reservation')
+  const navigate = useNavigate()
 
   const estAdmin = useAuthStore((s) => s.utilisateur?.role === 'admin')
   const cheminPaiement = estAdmin ? '/administration/checkout' : '/paiements'
@@ -54,8 +57,25 @@ export default function PagePaiement() {
   const { data: reservation, isLoading: reservationLoading, isError: reservationErreur } = useReservation(reservationId)
   const { data: reservations = [] } = useMesReservations()
   const { data: espaces = [] } = useEspaces()
+  const { data: profil, isLoading: profilLoading } = useProfilComplet()
   const initierPaiement = useInitierPaiement()
   const { success: toastSuccess, error: toastError } = useToast()
+
+  // Même garde-fou que le serveur (paiements/service.py::_verifier_kyc_et_cgu) :
+  // si on revient payer une réservation plus tard (ex. depuis « Mes réservations »)
+  // sans être passé par la modale juste après sa création, on la ré-affiche ici
+  // plutôt que de laisser l'utilisateur face à un 403 sans issue.
+  const kycManquantOuRefuse = Boolean(
+    profil && (
+      !profil.cni_recto_url ||
+      !profil.cni_verso_url ||
+      !profil.photo_identite_url ||
+      profil.document_statut === 'invalide' ||
+      (profil.type_compte === 'entreprise' && !profil.document_entreprise_url)
+    )
+  )
+  const cguManquantes = Boolean(reservation && !reservation.cgu_acceptees)
+  const besoinValidationCguKyc = !estAdmin && (kycManquantOuRefuse || cguManquantes)
 
   const [methode, setMethode] = useState('ORANGE')
   const [numeroTelephone, setNumeroTelephone] = useState('')
@@ -183,8 +203,30 @@ export default function PagePaiement() {
         </div>
       )}
 
+      {/* Conditions/KYC pas encore validés pour cette réservation : on bloque le paiement
+          côté UI (le serveur le fait de toute façon) et on affiche la modale ici plutôt
+          que de laisser l'utilisateur face à une erreur sans suite possible. */}
+      {reservationId && reservation && reservation.statut === 'en_attente' && !paiementConfirme
+        && !profilLoading && besoinValidationCguKyc && (
+        <>
+          <div className="rounded-2xl border border-ligne bg-white p-8 text-center">
+            <p className="text-sm text-ardoise">
+              Merci de valider les conditions d'utilisation et vos documents d'identification
+              avant de finaliser le paiement de cette réservation.
+            </p>
+          </div>
+          <ModaleCguKyc
+            reservationId={reservationId}
+            profil={profil}
+            onValide={() => toastSuccess('✅ Vérification complétée', 'Vous pouvez maintenant payer votre réservation.')}
+            onFermer={() => navigate(cheminRetour)}
+          />
+        </>
+      )}
+
       {/* Formulaire de paiement */}
-      {reservationId && reservation && reservation.statut === 'en_attente' && !paiementConfirme && (
+      {reservationId && reservation && reservation.statut === 'en_attente' && !paiementConfirme
+        && !profilLoading && !besoinValidationCguKyc && (
         <div className="grid gap-8 lg:grid-cols-[1fr_1.3fr]">
           {/* Récapitulatif */}
           <aside className="h-fit rounded-2xl border border-ligne bg-white p-6">

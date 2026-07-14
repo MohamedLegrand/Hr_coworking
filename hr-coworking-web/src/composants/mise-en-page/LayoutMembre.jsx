@@ -1,7 +1,7 @@
 import { NavLink, Outlet, Link } from 'react-router-dom'
 import useAuthStore from '../../contexte/authStore'
 import ClocheNotifications from '../communs/ClocheNotifications'
-import { Grille, Bureau, Calendrier, CartePaiement, Fleche, Personne } from '../communs/Icones'
+import { Grille, Bureau, Calendrier, CartePaiement, Fleche, Personne, Boucliers } from '../communs/Icones'
 
 const NAV = [
   { to: '/profil', label: 'Tableau de bord', icon: Grille, fin: true },
@@ -9,6 +9,7 @@ const NAV = [
   { to: '/reservations', label: 'Réservations', icon: Calendrier, fin: true },
   { to: '/paiements', label: 'Paiements', icon: CartePaiement, fin: true },
   { to: '/notifications', label: 'Notifications', icon: Personne, fin: true },
+  { to: '/parametres', label: 'Paramètres', icon: Boucliers, fin: true },
 ]
 
 function initiales(utilisateur) {
@@ -94,7 +95,7 @@ export default function LayoutMembre() {
           <div className="ml-auto flex items-center gap-3">
             <ClocheNotifications lien="/notifications" />
             <Link
-              to="/profil"
+              to="/parametres"
               aria-label="Mon profil"
               className="grid h-11 w-11 place-items-center rounded-full bg-violet text-sm font-bold text-white shadow-sm"
             >
