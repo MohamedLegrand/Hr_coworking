@@ -19,7 +19,9 @@ const FILTRES_STATUT = [
 /** Un utilisateur peut avoir document_statut='en_attente' sans avoir encore rien envoyé
  *  (statut par défaut à l'inscription, avant la vérification KYC pré-réservation). */
 function statutDocumentAffiche(utilisateur) {
-  if (!utilisateur.cni_url && !utilisateur.document_entreprise_url) return 'aucun'
+  if (!utilisateur.cni_recto_url && !utilisateur.cni_verso_url && !utilisateur.photo_identite_url && !utilisateur.document_entreprise_url) {
+    return 'aucun'
+  }
   return utilisateur.document_statut
 }
 
@@ -164,7 +166,9 @@ export default function PageAdminUtilisateurs() {
                     <td className="px-5 py-3.5">
                       <BadgeStatutDocument statut={statutDocumentAffiche(u)} />
                       <div className="mt-2 flex flex-col gap-1">
-                        <LienDocument href={urlDocument(u.cni_url)} libelle="la CNI" />
+                        <LienDocument href={urlDocument(u.cni_recto_url)} libelle="la CNI (recto)" />
+                        <LienDocument href={urlDocument(u.cni_verso_url)} libelle="la CNI (verso)" />
+                        <LienDocument href={urlDocument(u.photo_identite_url)} libelle="la photo" />
                         {u.type_compte === 'entreprise' && (
                           <LienDocument
                             href={urlDocument(u.document_entreprise_url)}

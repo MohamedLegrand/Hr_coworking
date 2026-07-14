@@ -7,8 +7,6 @@ export const LIBELLES_TYPE = {
 export const FILTRES_TYPE = [
   { valeur: null, libelle: 'Tous' },
   { valeur: 'bureau_individuel', libelle: 'Bureau privé' },
-  { valeur: 'salle_reunion', libelle: 'Salle de réunion' },
-  { valeur: 'open_space', libelle: 'Open space' },
 ]
 
 const IMAGES_DEFAUT = {
@@ -53,6 +51,13 @@ export function formatFcfa(montant) {
 
 export function libelleType(typeEspace) {
   return LIBELLES_TYPE[typeEspace] || typeEspace
+}
+
+/** Phrase à afficher sur un bureau déjà réservé : période exacte + heure de retour à disponibilité. */
+export function formatPeriodeReservee(dateDebut, dateFin) {
+  const debut = new Date(dateDebut).toLocaleString('fr-FR')
+  const fin = new Date(dateFin).toLocaleString('fr-FR')
+  return `Réservé du ${debut} au ${fin} — disponible à partir du ${fin}.`
 }
 
 /** URL absolue vers un document uploadé (CNI, justificatif entreprise…). */

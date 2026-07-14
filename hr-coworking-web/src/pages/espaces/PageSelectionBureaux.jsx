@@ -1,15 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import SalleCoworking3D from '../../composants/widgets/SalleCoworking3D'
 import AssistantReservation from '../../composants/widgets/AssistantReservation'
 import ModaleCguKyc from '../../composants/communs/ModaleCguKyc'
 import ImageEspace from '../../composants/communs/ImageEspace'
-import { Lieu, Plus, Croix } from '../../composants/communs/Icones'
-import { useCreerReservation } from '../../hooks/useReservations'
+import { Plus, Croix } from '../../composants/communs/Icones'
+import { useCreerReservation, useEspacesReserves } from '../../hooks/useReservations'
 import { useProfilComplet } from '../../hooks/useUtilisateurs'
 import { useEspaces } from '../../hooks/useEspaces'
 import { useToast } from '../../contexte/ToastContext'
-import { FILTRES_TYPE, libelleType } from '../../utilitaires/format'
+import { FILTRES_TYPE, formatPeriodeReservee } from '../../utilitaires/format'
 import { getErrorMessage, getErrorTitle } from '../../utilitaires/erreurs'
 
 export default function PageSelectionBureaux() {
@@ -19,6 +18,7 @@ export default function PageSelectionBureaux() {
   const creerReservation = useCreerReservation()
   const { data: profil } = useProfilComplet()
   const { data: espaces = [], isLoading: espacesLoading } = useEspaces()
+  const { data: reservationsActives = [] } = useEspacesReserves()
   const { error: toastError } = useToast()
   const navigate = useNavigate()
 
@@ -55,19 +55,12 @@ export default function PageSelectionBureaux() {
           Choisissez vos bureaux
         </h1>
         <p className="mt-3 max-w-xl text-sm leading-relaxed text-ardoise">
-          Cliquez sur un bureau disponible dans le plan 3D pour le sélectionner, choisissez votre
-          gamme, votre forfait et votre date, puis confirmez le récapitulatif.
+          Ajoutez un ou plusieurs espaces à votre récapitulatif, choisissez votre forfait et votre
+          date, puis confirmez.
         </p>
       </div>
 
-      <SalleCoworking3D
-        typeCompteUtilisateur={profil?.type_compte}
-        onReserver={reserver}
-        chargement={creerReservation.isPending}
-      />
-
-      {/* ===== CATALOGUE (alternative à la sélection en 3D) ===== */}
-      <div className="mt-10 grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <div className="rounded-2xl border border-ligne bg-white p-8 shadow-sm">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -93,23 +86,28 @@ export default function PageSelectionBureaux() {
               </div>
             </div>
 
-            <div className="mt-8 grid gap-5 sm:grid-cols-2">
+            <div className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
               {espacesLoading ? (
                 [1, 2].map((i) => <div key={i} className="h-40 rounded-2xl bg-lavande" />)
               ) : espacesFiltres.length === 0 ? (
-                <div className="rounded-2xl border border-ligne bg-slate-50 p-8 text-center text-sm text-slate-600 sm:col-span-2">
+                <div className="rounded-2xl border border-ligne bg-slate-50 p-8 text-center text-sm text-slate-600 sm:col-span-2 xl:col-span-4">
                   Aucun espace disponible pour ce filtre.
                 </div>
               ) : (
                 espacesFiltres.map((espace) => {
                   const dejaChoisi = panier.some((e) => e.id === espace.id)
+                  const reservation = reservationsActives
+                    .filter((r) => r.espace_id === espace.id)
+                    .sort((a, b) => new Date(a.date_debut) - new Date(b.date_debut))[0]
                   return (
                     <div key={espace.id} className="overflow-hidden rounded-2xl border border-ligne">
                       <div className="relative h-32">
                         <ImageEspace espace={espace} className="h-full w-full object-cover" />
-                        <span className="absolute left-3 top-3 rounded-full bg-violet/90 px-3 py-1 text-[10.5px] font-bold text-white">
-                          {libelleType(espace.type_espace)}
-                        </span>
+                        {reservation && (
+                          <span className="absolute left-3 top-3 rounded-full bg-amber-500/95 px-3 py-1 text-[10.5px] font-bold text-white">
+                            Réservé
+                          </span>
+                        )}
                       </div>
                       <div className="p-4">
                         <div className="flex items-center justify-between gap-2">
@@ -124,10 +122,11 @@ export default function PageSelectionBureaux() {
                             <Plus width={16} height={16} />
                           </button>
                         </div>
-                        <div className="mt-1.5 flex items-center gap-1.5 text-[12.5px] text-ardoise">
-                          <Lieu width={13} height={13} />
-                          {espace.localisation || 'Yaoundé'}
-                        </div>
+                        {reservation && (
+                          <p className="mt-2 text-[11.5px] leading-snug text-amber-700">
+                            Espace réservé — {formatPeriodeReservee(reservation.date_debut, reservation.date_fin)}
+                          </p>
+                        )}
                         {dejaChoisi && (
                           <p className="mt-3 text-[11.5px] font-semibold text-violet">Ajouté au récapitulatif →</p>
                         )}
@@ -158,7 +157,6 @@ export default function PageSelectionBureaux() {
                   <div key={espace.id} className="flex items-center justify-between gap-2 rounded-xl border border-ligne p-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-encre">{espace.nom}</p>
-                      <p className="text-xs text-ardoise">{libelleType(espace.type_espace)}</p>
                     </div>
                     <button
                       type="button"

@@ -1,8 +1,11 @@
 import { Link } from 'react-router-dom'
 import { useStatistiquesAdmin } from '../../hooks/useUtilisateurs'
+import { useEspacesAdmin } from '../../hooks/useEspaces'
+import { useEspacesOccupesMaintenant } from '../../hooks/useReservations'
 import AlerteErreur from '../../composants/communs/AlerteErreur'
+import ImageEspace from '../../composants/communs/ImageEspace'
 import { Bureau, Personne, Calendrier, CartePaiement, Fleche } from '../../composants/communs/Icones'
-import { formatFcfa } from '../../utilitaires/format'
+import { formatFcfa, formatPeriodeReservee } from '../../utilitaires/format'
 
 function StatCard({ titre, valeur, description, icon, lien }) {
   return (
@@ -24,6 +27,8 @@ function StatCard({ titre, valeur, description, icon, lien }) {
 
 export default function PageAdminAccueil() {
   const { data: stats, isLoading, error } = useStatistiquesAdmin()
+  const { data: espaces = [], isLoading: espacesLoading } = useEspacesAdmin()
+  const { data: occupesMaintenant = [] } = useEspacesOccupesMaintenant()
 
   return (
     <div className="pb-16">
@@ -76,6 +81,50 @@ export default function PageAdminAccueil() {
           icon={<CartePaiement width={18} height={18} />}
           lien="/administration/paiements"
         />
+      </div>
+
+      <div className="mt-10">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-titre text-lg font-semibold tracking-tight text-encre">Bureaux</h2>
+          <Link to="/administration/espaces" className="text-[13px] font-semibold text-violet hover:text-violet-fonce">
+            Gérer les bureaux →
+          </Link>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {espacesLoading ? (
+            [1, 2, 3, 4].map((i) => <div key={i} className="h-24 animate-pulse rounded-2xl bg-lavande" />)
+          ) : (
+            espaces.map((espace) => {
+              const occupation = occupesMaintenant.find((o) => o.espace_id === espace.id)
+              return (
+                <div key={espace.id} className="flex items-start gap-3 rounded-2xl border border-ligne bg-white p-3">
+                  <div className="h-14 w-14 flex-none overflow-hidden rounded-xl bg-lavande">
+                    <ImageEspace espace={espace} className="h-full w-full object-cover" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13.5px] font-semibold text-encre">{espace.nom}</p>
+                    <span
+                      className={`mt-1 inline-block rounded-full px-2.5 py-1 text-[10.5px] font-bold ${
+                        !espace.est_disponible
+                          ? 'bg-red-100 text-red-700'
+                          : occupation
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-emerald-100 text-emerald-700'
+                      }`}
+                    >
+                      {!espace.est_disponible ? 'Indisponible' : occupation ? 'Occupé' : 'Disponible'}
+                    </span>
+                    {occupation && (
+                      <p className="mt-1.5 text-[11px] leading-snug text-amber-700">
+                        {formatPeriodeReservee(occupation.date_debut, occupation.date_fin)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
       </div>
 
       <div className="mt-10 grid gap-5 sm:grid-cols-2">

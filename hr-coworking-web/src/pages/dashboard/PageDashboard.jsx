@@ -88,8 +88,8 @@ export default function PageDashboard() {
       .slice(0, 3)
   }, [reservations])
 
-  // "Active" = pas annulée : une réservation créée depuis le plan 3D (ou le
-  // panier) compte dès sa création, même avant confirmation du paiement.
+  // "Active" = pas annulée : une réservation créée depuis le catalogue
+  // compte dès sa création, même avant confirmation du paiement.
   const actifs = useMemo(
     () => (reservations || []).filter((r) => r.statut !== 'annulee').length,
     [reservations],
@@ -269,7 +269,7 @@ export default function PageDashboard() {
           {
             id: 'dashboard_espaces',
             titre: '🏢 Réserver des espaces',
-            description: 'Cliquez sur « Réserver un espace » pour accéder au plan 3D et au catalogue : choisissez vos bureaux, votre gamme, votre forfait et votre date.',
+            description: 'Cliquez sur « Réserver un espace » pour accéder au catalogue : choisissez vos bureaux, votre forfait et votre date.',
             x: 50,
             y: 20,
           },

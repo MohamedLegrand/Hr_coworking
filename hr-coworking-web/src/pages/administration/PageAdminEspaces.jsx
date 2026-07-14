@@ -1,36 +1,29 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { useEspacesAdmin, useCreerEspace, useModifierEspace, useSupprimerEspace } from '../../hooks/useEspaces'
-import { useCreerReservation } from '../../hooks/useReservations'
-import { useToast } from '../../contexte/ToastContext'
+import { useEspacesOccupesMaintenant } from '../../hooks/useReservations'
 import Modale from '../../composants/communs/Modale'
 import ChampTexte from '../../composants/communs/ChampTexte'
 import ChampFichier from '../../composants/communs/ChampFichier'
 import BoutonSoumission from '../../composants/communs/BoutonSoumission'
 import ImageEspace from '../../composants/communs/ImageEspace'
 import AlerteErreur from '../../composants/communs/AlerteErreur'
-import SalleCoworking3D from '../../composants/widgets/SalleCoworking3D'
 import { Plus, Crayon, Corbeille } from '../../composants/communs/Icones'
-import { libelleType, LIBELLES_TYPE } from '../../utilitaires/format'
-import { getErrorMessage, getErrorTitle } from '../../utilitaires/erreurs'
+import { libelleType, LIBELLES_TYPE, formatPeriodeReservee } from '../../utilitaires/format'
 
 const VALEURS_PAR_DEFAUT = {
   nom: '',
   type_espace: 'bureau_individuel',
   capacite: 1,
   localisation: '',
-  visible_plan_3d: true,
 }
 
 export default function PageAdminEspaces() {
   const { data: espaces = [], isLoading, error } = useEspacesAdmin()
+  const { data: occupesMaintenant = [] } = useEspacesOccupesMaintenant()
   const creer = useCreerEspace()
   const modifier = useModifierEspace()
   const supprimer = useSupprimerEspace()
-  const creerReservation = useCreerReservation()
-  const { error: toastError } = useToast()
-  const navigate = useNavigate()
 
   const [modaleOuverte, setModaleOuverte] = useState(false)
   const [espaceEnEdition, setEspaceEnEdition] = useState(null)
@@ -55,7 +48,6 @@ export default function PageAdminEspaces() {
       type_espace: espace.type_espace,
       capacite: espace.capacite,
       localisation: espace.localisation || '',
-      visible_plan_3d: espace.visible_plan_3d,
     })
     setModaleOuverte(true)
   }
@@ -66,7 +58,6 @@ export default function PageAdminEspaces() {
     const payload = {
       ...valeurs,
       capacite: Number(valeurs.capacite),
-      visible_plan_3d: Boolean(valeurs.visible_plan_3d),
       image,
     }
 
@@ -93,15 +84,6 @@ export default function PageAdminEspaces() {
     }
   }
 
-  const reserverDepuisLaVue3D = (payload) => {
-    creerReservation.mutate(payload, {
-      onSuccess: (reservationCreee) => {
-        navigate(`/administration/checkout?reservation=${reservationCreee.id}`)
-      },
-      onError: (err) => toastError(getErrorTitle(err), getErrorMessage(err)),
-    })
-  }
-
   return (
     <div className="pb-16">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -112,8 +94,7 @@ export default function PageAdminEspaces() {
           </h1>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-ardoise">
             Créez, modifiez ou retirez des espaces du catalogue, et basculez leur disponibilité.
-            Les bureaux n'ont pas de prix propre : la gamme (standard/VIP) et le forfait sont
-            choisis par le client à la réservation.
+            Les bureaux n'ont pas de prix propre : le forfait est choisi par le client à la réservation.
           </p>
         </div>
         <button
@@ -129,17 +110,6 @@ export default function PageAdminEspaces() {
       {error && <div className="mb-6"><AlerteErreur erreur={error} /></div>}
       {supprimer.isError && <div className="mb-6"><AlerteErreur erreur={supprimer.error} /></div>}
 
-      {/* Vue 3D du plan de salle — identique à celle de l'espace client, avec sélection et réservation */}
-      <div className="mb-8">
-        <h2 className="mb-4 font-titre text-lg font-semibold tracking-tight text-encre">
-          Vue 3D du plan de salle
-        </h2>
-        <SalleCoworking3D
-          onReserver={reserverDepuisLaVue3D}
-          chargement={creerReservation.isPending}
-        />
-      </div>
-
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {isLoading ? (
           [1, 2, 3].map((i) => <div key={i} className="h-64 animate-pulse rounded-2xl bg-lavande" />)
@@ -148,7 +118,9 @@ export default function PageAdminEspaces() {
             Aucun bureau enregistré pour le moment.
           </div>
         ) : (
-          espaces.map((espace) => (
+          espaces.map((espace) => {
+            const occupation = occupesMaintenant.find((o) => o.espace_id === espace.id)
+            return (
             <div key={espace.id} className="overflow-hidden rounded-2xl border border-ligne bg-white">
               <div className="relative h-52 bg-lavande">
                 <ImageEspace espace={espace} className="h-full w-full object-contain p-3" />
@@ -182,19 +154,15 @@ export default function PageAdminEspaces() {
                 <p className="mt-1 text-[12.5px] text-ardoise">{espace.localisation || 'Yaoundé'} · {espace.capacite} pl.</p>
 
                 <div className="mt-3 flex items-center justify-between gap-2">
-                  {espace.visible_plan_3d ? (
-                    <span className="rounded-full bg-lavande px-3 py-1.5 text-[11px] font-bold text-violet">
-                      Plan 3D
-                    </span>
-                  ) : (
-                    <span className="rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-500">
-                      Catalogue seul
+                  {occupation && (
+                    <span className="rounded-full bg-amber-100 px-3 py-1.5 text-[11px] font-bold text-amber-700">
+                      Occupé
                     </span>
                   )}
                   <button
                     type="button"
                     onClick={() => basculerDisponibilite(espace)}
-                    className={`rounded-full px-3 py-1.5 text-[11px] font-bold transition ${
+                    className={`ml-auto rounded-full px-3 py-1.5 text-[11px] font-bold transition ${
                       espace.est_disponible
                         ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
                         : 'bg-red-100 text-red-700 hover:bg-red-200'
@@ -203,9 +171,16 @@ export default function PageAdminEspaces() {
                     {espace.est_disponible ? 'Disponible' : 'Indisponible'}
                   </button>
                 </div>
+
+                {occupation && (
+                  <p className="mt-2 text-[11.5px] leading-snug text-amber-700">
+                    {formatPeriodeReservee(occupation.date_debut, occupation.date_fin)}
+                  </p>
+                )}
               </div>
             </div>
-          ))
+            )
+          })
         )}
       </div>
 
@@ -262,21 +237,6 @@ export default function PageAdminEspaces() {
                 {...register('localisation')}
               />
             </div>
-
-            <label className="flex cursor-pointer items-start gap-2.5">
-              <input
-                type="checkbox"
-                {...register('visible_plan_3d')}
-                className="mt-0.5 h-4 w-4 accent-violet"
-              />
-              <span className="text-[13.5px] text-encre">
-                <span className="font-semibold">Visible dans le plan 3D</span>
-                <span className="block text-[12px] text-ardoise">
-                  Occupe l'un des 8 emplacements physiques. Décochez pour un bureau réservable
-                  uniquement depuis le catalogue (cartes).
-                </span>
-              </span>
-            </label>
 
             <ChampFichier
               label="Photo du bureau"

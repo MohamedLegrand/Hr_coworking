@@ -27,11 +27,15 @@ export async function creerReservation({ espaceIds, gamme, forfait, dateDebut })
   return data
 }
 
-/** Acceptation des CGU (par réservation) + dépôt des documents KYC si nécessaire. */
-export async function validerCguKyc({ reservationId, cguAcceptees, cni, documentEntreprise }) {
+/** Acceptation des conditions (par réservation) + dépôt des documents KYC si nécessaire. */
+export async function validerCguKyc({
+  reservationId, cguAcceptees, cniRecto, cniVerso, photoIdentite, documentEntreprise,
+}) {
   const formData = new FormData()
   formData.append('cgu_acceptees', cguAcceptees ? 'true' : 'false')
-  if (cni) formData.append('cni', cni)
+  if (cniRecto) formData.append('cni_recto', cniRecto)
+  if (cniVerso) formData.append('cni_verso', cniVerso)
+  if (photoIdentite) formData.append('photo_identite', photoIdentite)
   if (documentEntreprise) formData.append('document_entreprise', documentEntreprise)
 
   const { data } = await client.post(`/reservations/${reservationId}/valider-cgu-kyc`, formData, {

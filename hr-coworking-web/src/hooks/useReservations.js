@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   obtenirForfaits,
@@ -43,6 +44,30 @@ export function useIndisponibilites(debut, fin) {
     enabled: Boolean(debut && fin && fin > debut),
     staleTime: 1000 * 30,
   })
+}
+
+/** Bureaux occupés à l'instant présent (réservation en_attente/confirmée en cours). */
+export function useEspacesOccupesMaintenant() {
+  const { debut, fin } = useMemo(() => {
+    const debut = new Date()
+    return { debut, fin: new Date(debut.getTime() + 5 * 60 * 1000) }
+  }, [])
+  return useIndisponibilites(debut, fin)
+}
+
+/**
+ * Bureaux ayant une réservation active à venir ou en cours (en_attente/confirmée),
+ * sur une large fenêtre (1 an) — sert à signaler "espace réservé" sur les cartes du
+ * catalogue, indépendamment de l'heure exacte à laquelle le client consulte la page.
+ */
+export function useEspacesReserves() {
+  const { debut, fin } = useMemo(() => {
+    const debut = new Date()
+    const fin = new Date(debut)
+    fin.setFullYear(fin.getFullYear() + 1)
+    return { debut, fin }
+  }, [])
+  return useIndisponibilites(debut, fin)
 }
 
 export function useCreerReservation() {

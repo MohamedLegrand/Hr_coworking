@@ -27,22 +27,26 @@ const CONDITIONS = [
 export default function ModaleCguKyc({ reservationId, profil, onValide, onFermer }) {
   const estEntreprise = profil?.type_compte === 'entreprise'
   const documentsRefuses = profil?.document_statut === 'invalide'
-  const besoinCni = !profil?.cni_url || documentsRefuses
+  const besoinCniRecto = !profil?.cni_recto_url || documentsRefuses
+  const besoinCniVerso = !profil?.cni_verso_url || documentsRefuses
+  const besoinPhotoIdentite = !profil?.photo_identite_url || documentsRefuses
   const besoinDocEntreprise = estEntreprise && (!profil?.document_entreprise_url || documentsRefuses)
-  const besoinKyc = besoinCni || besoinDocEntreprise
+  const besoinKyc = besoinCniRecto || besoinCniVerso || besoinPhotoIdentite || besoinDocEntreprise
 
   const [etape, setEtape] = useState('cgu')
   const [accepte, setAccepte] = useState(false)
-  const [cni, setCni] = useState(null)
+  const [cniRecto, setCniRecto] = useState(null)
+  const [cniVerso, setCniVerso] = useState(null)
+  const [photoIdentite, setPhotoIdentite] = useState(null)
   const [documentEntreprise, setDocumentEntreprise] = useState(null)
   const [erreur, setErreur] = useState('')
 
   const { mutate, isPending } = useValiderCguKyc()
   const { error: toastError } = useToast()
 
-  const valider = (cniFichier, documentEntrepriseFichier) => {
+  const valider = (fichiers) => {
     mutate(
-      { reservationId, cguAcceptees: true, cni: cniFichier, documentEntreprise: documentEntrepriseFichier },
+      { reservationId, cguAcceptees: true, ...fichiers },
       {
         onSuccess: () => onValide?.(),
         onError: (err) => toastError(getErrorTitle(err), getErrorMessage(err), 5000),
@@ -62,7 +66,7 @@ export default function ModaleCguKyc({ reservationId, profil, onValide, onFermer
     if (besoinKyc) {
       setEtape('kyc')
     } else {
-      valider(null, null)
+      valider({})
     }
   }
 
@@ -70,8 +74,16 @@ export default function ModaleCguKyc({ reservationId, profil, onValide, onFermer
     e.preventDefault()
     setErreur('')
 
-    if (besoinCni && !cni) {
-      setErreur('La photo de votre CNI est obligatoire.')
+    if (besoinCniRecto && !cniRecto) {
+      setErreur('La photo recto de votre CNI est obligatoire.')
+      return
+    }
+    if (besoinCniVerso && !cniVerso) {
+      setErreur('La photo verso de votre CNI est obligatoire.')
+      return
+    }
+    if (besoinPhotoIdentite && !photoIdentite) {
+      setErreur('Une photo de vous est obligatoire.')
       return
     }
     if (besoinDocEntreprise && !documentEntreprise) {
@@ -79,7 +91,7 @@ export default function ModaleCguKyc({ reservationId, profil, onValide, onFermer
       return
     }
 
-    valider(cni, documentEntreprise)
+    valider({ cniRecto, cniVerso, photoIdentite, documentEntreprise })
   }
 
   if (etape === 'kyc') {
@@ -97,12 +109,32 @@ export default function ModaleCguKyc({ reservationId, profil, onValide, onFermer
             </p>
           </div>
 
-          {besoinCni && (
+          {besoinCniRecto && (
             <ChampFichier
-              label="Photo de la CNI"
-              nom="cni_reservation"
-              description="CNI recto-verso ou passeport — PDF, JPG, PNG, max 5 Mo"
-              onChange={setCni}
+              label="Photo de la CNI — recto"
+              nom="cni_recto_reservation"
+              description="Face avant de la carte d'identité ou du passeport — JPG, PNG, max 5 Mo"
+              onChange={setCniRecto}
+              obligatoire
+            />
+          )}
+
+          {besoinCniVerso && (
+            <ChampFichier
+              label="Photo de la CNI — verso"
+              nom="cni_verso_reservation"
+              description="Face arrière de la carte d'identité ou du passeport — JPG, PNG, max 5 Mo"
+              onChange={setCniVerso}
+              obligatoire
+            />
+          )}
+
+          {besoinPhotoIdentite && (
+            <ChampFichier
+              label="Photo de vous"
+              nom="photo_identite_reservation"
+              description="Photo récente du visage de la personne qui réserve — JPG, PNG, max 5 Mo"
+              onChange={setPhotoIdentite}
               obligatoire
             />
           )}
@@ -147,14 +179,15 @@ export default function ModaleCguKyc({ reservationId, profil, onValide, onFermer
             <Boucliers width={18} height={18} />
           </span>
           <p className="text-[13px] leading-relaxed text-ardoise">
-            Merci de lire et d'accepter les conditions ci-dessous avant de finaliser le paiement
-            de cette réservation.
+            Merci de lire et d'accepter les conditions ci-dessous, proposées par
+            <span className="font-semibold text-encre"> HR-SKILLS SARL</span>, avant de finaliser
+            le paiement de cette réservation.
           </p>
         </div>
 
         <div className="flex flex-col gap-1.5">
           <span className="text-[13.5px] font-semibold text-encre">
-            Conditions d'utilisation de l'espace
+            Conditions d'utilisation de l'espace — HR-SKILLS SARL
           </span>
           <ul className="max-h-48 overflow-y-auto rounded-lg border border-ligne bg-white p-4">
             {CONDITIONS.map((condition, index) => (
@@ -177,7 +210,8 @@ export default function ModaleCguKyc({ reservationId, profil, onValide, onFermer
             className="mt-0.5 h-4 w-4 flex-none accent-violet"
           />
           <span className="text-[13.5px] leading-relaxed text-encre">
-            J'ai lu et j'accepte les conditions d'utilisation de l'espace de coworking pour cette réservation.
+            J'ai lu et j'accepte les conditions proposées par HR-SKILLS SARL pour l'utilisation de
+            l'espace de coworking dans le cadre de cette réservation.
           </span>
         </label>
 

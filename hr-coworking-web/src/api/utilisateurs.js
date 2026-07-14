@@ -40,12 +40,12 @@ export async function envoyerVerificationReservation({ conditionsAcceptees, cni,
   return data
 }
 
-export async function reuploadDocuments({ cni, document_entreprise }) {
+export async function reuploadDocuments({ cniRecto, cniVerso, photoIdentite, documentEntreprise }) {
   const formData = new FormData()
-  if (cni) formData.append('cni', cni)
-  if (document_entreprise) {
-    formData.append('document_entreprise', document_entreprise)
-  }
+  if (cniRecto) formData.append('cni_recto', cniRecto)
+  if (cniVerso) formData.append('cni_verso', cniVerso)
+  if (photoIdentite) formData.append('photo_identite', photoIdentite)
+  if (documentEntreprise) formData.append('document_entreprise', documentEntreprise)
 
   const { data } = await client.post('/utilisateurs/documents', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },

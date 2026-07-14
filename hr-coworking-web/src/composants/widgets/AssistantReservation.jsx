@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useForfaits, useIndisponibilites } from '../../hooks/useReservations'
-import { formatFcfa } from '../../utilitaires/format'
+import { formatFcfa, formatPeriodeReservee } from '../../utilitaires/format'
 import { libelleForfait, libelleGamme } from '../../utilitaires/tarifs'
 import { Fleche } from '../communs/Icones'
 
@@ -54,7 +54,9 @@ export default function AssistantReservation({ espaces, onReserver, chargement, 
     etape === 'date' || etape === 'recap' ? debut : null,
     etape === 'date' || etape === 'recap' ? fin : null,
   )
-  const bureauxEnConflit = espaces.filter((e) => indisponibles.includes(e.id))
+  const bureauxEnConflit = espaces
+    .map((e) => ({ espace: e, conflit: indisponibles.find((i) => i.espace_id === e.id) }))
+    .filter((x) => x.conflit)
 
   const total = (forfaitChoisi?.prix || 0) * espaces.length
 
@@ -83,23 +85,23 @@ export default function AssistantReservation({ espaces, onReserver, chargement, 
       {/* Étape 1 : forfait */}
       <div className="rounded-xl border border-ligne bg-white p-5">
         <p className="mb-3 text-[13px] font-semibold text-ardoise">1. Choisissez votre forfait</p>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3">
           {forfaitsGamme.map((f) => (
             <button
               key={f.forfait}
               type="button"
               onClick={() => { setForfait(f.forfait); setEtape('date') }}
-              className={`relative flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-all ${
+              className={`relative flex flex-col items-start gap-1.5 rounded-lg border p-3 text-left transition-all ${
                 forfait === f.forfait ? 'border-violet bg-lavande' : 'border-ligne hover:border-violet/40'
               }`}
             >
               {f.meilleure_valeur && (
-                <span className="absolute -top-2 right-2 rounded-full bg-violet px-2 py-0.5 text-[9px] font-bold text-white">
+                <span className="absolute -top-2 right-3 whitespace-nowrap rounded-full bg-violet px-2 py-0.5 text-[9px] font-bold text-white">
                   Meilleure valeur
                 </span>
               )}
               <span className="text-[12.5px] font-semibold text-encre">{libelleForfait(f.forfait)}</span>
-              <span className="text-[13.5px] font-bold text-violet">{formatFcfa(f.prix)}</span>
+              <span className="whitespace-nowrap text-[14px] font-bold text-violet">{formatFcfa(f.prix)}</span>
             </button>
           ))}
         </div>
@@ -136,9 +138,13 @@ export default function AssistantReservation({ espaces, onReserver, chargement, 
           </p>
 
           {bureauxEnConflit.length > 0 && (
-            <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[12.5px] font-medium text-red-700">
-              {bureauxEnConflit.map((e) => e.nom).join(', ')} déjà réservé{bureauxEnConflit.length > 1 ? 's' : ''} sur ce créneau. Choisissez une autre date.
-            </p>
+            <div className="mt-3 space-y-1.5 rounded-lg bg-red-50 px-3 py-2">
+              {bureauxEnConflit.map(({ espace, conflit }) => (
+                <p key={espace.id} className="text-[12.5px] font-medium text-red-700">
+                  {espace.nom} — {formatPeriodeReservee(conflit.date_debut, conflit.date_fin)} Choisissez une autre date.
+                </p>
+              ))}
+            </div>
           )}
 
           {etape === 'date' && (
