@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     UPLOAD_IMAGES_DIR: str = "static/images/espaces"
     HR_SKILLS_PAY_API_KEY: str = ""
     HR_SKILLS_PAY_BASE_URL: str = ""
+    HR_SKILLS_PAY_CLE_A: str = ""
+    HR_SKILLS_PAY_CLE_B: str = ""
+    HR_SKILLS_PAY_WEBHOOK_SECRET: str = ""
+    HR_SKILLS_PAY_PAYS: str = "CM"
+    HR_SKILLS_PAY_DEVISE: str = "XAF"
+    HR_SKILLS_PAY_TOKEN_CACHE: str = ".hrpay_token.json"
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
     FRONTEND_URL: str = "http://localhost:5173"
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")

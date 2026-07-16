@@ -1,7 +1,7 @@
 """
 Modèle SQLAlchemy de la table `paiements`.
 Direction toujours CASHIN.
-Agrégateur : HR-Skills Pay (Mobile Money MTN / Orange Cameroun, ou carte bancaire).
+Agrégateur : HR-Skills Pay (Mobile Money MTN / Orange Cameroun).
 """
 
 import uuid

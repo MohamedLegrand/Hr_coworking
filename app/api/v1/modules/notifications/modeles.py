@@ -17,7 +17,7 @@ class Notification(Base):
     utilisateur_id = Column(
         UUID(as_uuid=True), ForeignKey("utilisateurs.id"), nullable=False
     )
-    type = Column(String(30), nullable=False)  # confirmation | rappel | annulation | reservation_creee | paiement_recu
+    type = Column(String(30), nullable=False)  # confirmation | rappel | annulation | reservation_creee | paiement_recu | document_valide | document_refuse
     titre = Column(String(150), nullable=False)
     contenu = Column(Text, nullable=False)
     est_lu = Column(Boolean, nullable=False, default=False)

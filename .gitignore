@@ -4,6 +4,7 @@ venv/
 .venv/
 env/
 .env
+.hrpay_token.json
 static/uploads/*
 !static/uploads/.gitkeep
 .vscode/

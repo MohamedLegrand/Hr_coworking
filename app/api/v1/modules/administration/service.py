@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.modules.authentification.modeles import Utilisateur
 from app.api.v1.modules.espaces.modeles import Espace
+from app.api.v1.modules.notifications.service import notifier_validation_documents
 from app.api.v1.modules.paiements.modeles import Paiement
 from app.api.v1.modules.reservations.modeles import Reservation
 
@@ -58,6 +59,14 @@ def valider_document(
     utilisateur.document_statut = nouveau_statut
     db.commit()
     db.refresh(utilisateur)
+
+    notifier_validation_documents(
+        db,
+        utilisateur_id=str(utilisateur.id),
+        email_utilisateur=utilisateur.email,
+        statut=nouveau_statut,
+    )
+
     return utilisateur
 
 

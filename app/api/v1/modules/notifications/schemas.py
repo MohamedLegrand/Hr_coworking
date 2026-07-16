@@ -15,6 +15,8 @@ class TypeNotification(str, Enum):
     annulation = "annulation"
     reservation_creee = "reservation_creee"
     paiement_recu = "paiement_recu"
+    document_valide = "document_valide"
+    document_refuse = "document_refuse"
 
 
 class NotificationReponse(BaseModel):

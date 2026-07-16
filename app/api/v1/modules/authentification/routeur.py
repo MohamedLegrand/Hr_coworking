@@ -30,9 +30,10 @@ def inscription(
 ):
     """
     Inscription d'un freelance ou d'une entreprise.
-    Les documents KYC (CNI, justificatif d'entreprise) et l'acceptation des
-    conditions d'utilisation sont demandés plus tard, avant la première
-    réservation, via POST /utilisateurs/verification-reservation.
+    Les documents KYC (CNI recto/verso, photo d'identité, justificatif
+    d'entreprise) et l'acceptation des conditions d'utilisation sont demandés
+    plus tard, réservation par réservation, via
+    POST /reservations/{id}/valider-cgu-kyc.
     """
     return service.creer_utilisateur(
         db=db,

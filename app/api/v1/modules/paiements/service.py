@@ -3,7 +3,7 @@ Logique métier du module paiements.
 
 Workflow :
 1. L'utilisateur initie un paiement → on crée un Paiement (PENDING)
-   et on appelle l'API HR-Skills Pay (placeholder pour le MVP)
+   et on appelle le SDK HR-Skills Pay
 2. HR-Skills Pay envoie un webhook → on met à jour le statut
 3. Si SUCCESS → on confirme la réservation ET on envoie une notification
 4. Si FAILED  → la réservation reste en_attente (l'utilisateur peut réessayer)
@@ -13,6 +13,14 @@ import uuid
 from decimal import Decimal
 
 from fastapi import HTTPException, status
+from hrpay.errors import (
+    APIError,
+    AuthenticationError,
+    HRPayError,
+    RateLimitError,
+    ValidationError,
+    WalletError,
+)
 from sqlalchemy.orm import Session
 
 from app.api.v1.modules.authentification.modeles import Utilisateur
@@ -24,41 +32,15 @@ from app.api.v1.modules.paiements.modeles import Paiement
 from app.api.v1.modules.reservations.modeles import Reservation
 from app.api.v1.modules.reservations.service import confirmer_reservation
 from app.noyau.configuration import settings
+from app.noyau.hrskillspay import client_partage, formater_numero_cameroun
 
-
-_STATUTS_WEBHOOK_VALIDES = {"PENDING", "SUCCESS", "FAILED", "HOLD"}
-
-
-def _generer_reference() -> str:
-    return f"HRC-{uuid.uuid4().hex[:12].upper()}"
-
-
-def _appeler_api_hrskillspay(
-    reference: str,
-    montant: Decimal,
-    operateur: str,
-    numero_telephone: str | None,
-    description: str,
-) -> dict:
-    """
-    Appel à l'API HR-Skills Pay pour initier un CASHIN.
-    Placeholder pour le MVP — affiche dans les logs.
-
-    TODO (production) :
-        import httpx
-        response = httpx.post(
-            f"{settings.HR_SKILLS_PAY_BASE_URL}/cashin",
-            headers={"Authorization": f"Bearer {settings.HR_SKILLS_PAY_API_KEY}"},
-            json={"reference": reference, "amount": float(montant), ...}
-        )
-        return response.json()
-    """
-    print(
-        f"[HR-SKILLS PAY] Initiation CASHIN — "
-        f"ref: {reference} | montant: {montant} XAF | "
-        f"opérateur: {operateur} | téléphone: {numero_telephone}"
-    )
-    return {"status": "PENDING", "transaction_id": None}
+# Correspondance entre les événements HR-Skills Pay et les statuts internes
+EVENEMENTS_STATUT = {
+    "payment.succeeded": "SUCCESS",
+    "payment.failed": "FAILED",
+    "payment.hold": "HOLD",
+    "payment.refunded": "REFUNDED",
+}
 
 
 def _verifier_kyc_et_cgu(utilisateur: Utilisateur, reservation: Reservation) -> None:
@@ -96,9 +78,19 @@ def initier_paiement(
     utilisateur_id: str,
     reservation_id: str,
     operateur: str,
-    numero_telephone: str | None,
+    numero_telephone: str,
     description: str | None = None,
 ) -> Paiement:
+    """
+    Initie un Cash-In Mobile Money via le SDK HR-Skills Pay.
+
+    Séquence :
+    1. Vérifications métier (KYC/CGU, réservation valide, pas de paiement en cours)
+    2. Création du Paiement en base AVANT l'appel réseau, avec sa clé
+       d'idempotence — garantit qu'un retry ne double-débite jamais le client
+    3. Appel au SDK
+    4. Mise à jour avec la référence, les frais et le net réels de l'API
+    """
     reservation = (
         db.query(Reservation)
         .filter(
@@ -140,71 +132,157 @@ def initier_paiement(
             detail="Un paiement est déjà en cours pour cette réservation.",
         )
 
-    reference = _generer_reference()
-    montant = Decimal(str(reservation.prix_total))
+    montant = int(Decimal(str(reservation.prix_total)))
+    # TEMPORAIRE — seuil abaissé pour tester la collecte avec un petit montant
+    # pendant que le wallet HR-Skills Pay est sous-approvisionné. À remettre
+    # à 100 après les tests.
+    if montant < 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le montant minimum de paiement est de 100 XAF.",
+        )
+
+    telephone = formater_numero_cameroun(numero_telephone)
     libelle = description or f"Réservation HR Coworking — {str(reservation_id)[:8]}"
+    cle_idempotence = str(uuid.uuid4())
 
-    reponse_api = _appeler_api_hrskillspay(
-        reference=reference,
-        montant=montant,
-        operateur=operateur,
-        numero_telephone=numero_telephone,
-        description=libelle,
-    )
-
+    # Persister le paiement AVANT l'appel réseau : la clé d'idempotence est
+    # déjà en base, donc une erreur réseau ne fait pas perdre la trace de la
+    # transaction et un retry ne créera pas de double débit.
     nouveau_paiement = Paiement(
-        reference=reference,
-        id_transaction=reponse_api.get("transaction_id"),
+        reference=f"tmp_{cle_idempotence}",  # remplacé par la ref HR-Skills Pay
         utilisateur_id=utilisateur_id,
         reservation_id=reservation_id,
         direction="CASHIN",
-        montant=montant,
+        montant=Decimal(montant),
         frais=Decimal("0"),
-        montant_net=montant,
-        devise="XAF",
+        montant_net=Decimal(montant),
+        devise=settings.HR_SKILLS_PAY_DEVISE,
         operateur=operateur,
-        pays="CM",
-        numero_telephone=numero_telephone,
+        pays=settings.HR_SKILLS_PAY_PAYS,
+        numero_telephone=telephone,
         statut="PENDING",
-        cle_idempotence=uuid.uuid4().hex,
+        cle_idempotence=cle_idempotence,
         description=libelle,
     )
-
     db.add(nouveau_paiement)
+    db.commit()
+    db.refresh(nouveau_paiement)
+
+    try:
+        reponse = client_partage().cash_in.mobile_money(
+            phone_number=telephone,
+            operator=operateur,               # "MTN" ou "ORANGE" (MAJUSCULES)
+            amount=montant,
+            currency=settings.HR_SKILLS_PAY_DEVISE,
+            country=settings.HR_SKILLS_PAY_PAYS,
+            description=libelle,
+            metadata={
+                "reservation_id": str(reservation_id),
+                "utilisateur_id": str(utilisateur_id),
+            },
+            idempotency_key=cle_idempotence,
+        )
+    except AuthenticationError as e:
+        # 401/403 : clés invalides OU KYC non approuvé (clés live bloquées)
+        nouveau_paiement.statut = "FAILED"
+        nouveau_paiement.description = f"{libelle} — auth : {e.code}"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                f"Configuration de paiement invalide ({e.code}). "
+                "Vérifiez les clés HR-Skills Pay et l'approbation KYC du compte."
+            ),
+        )
+    except ValidationError as e:
+        nouveau_paiement.statut = "FAILED"
+        nouveau_paiement.description = f"{libelle} — validation : {e.code}"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Paiement refusé ({e.code}) : {getattr(e, 'issues', e)}",
+        )
+    except RateLimitError as e:
+        nouveau_paiement.statut = "FAILED"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Trop de requêtes. Réessayez dans {e.retry_after_seconds}s.",
+        )
+    except (APIError, WalletError) as e:
+        nouveau_paiement.statut = "FAILED"
+        nouveau_paiement.description = f"{libelle} — échec : {e.code}"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Échec de l'initiation du paiement ({e.code}) : {e}",
+        )
+    except HRPayError as e:
+        # Réseau, timeout, circuit breaker
+        nouveau_paiement.statut = "FAILED"
+        nouveau_paiement.description = f"{libelle} — erreur : {type(e).__name__}"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Service de paiement injoignable : {type(e).__name__}",
+        )
+
+    # Enregistrer la référence et les montants réels renvoyés par l'API.
+    # C'est la référence HR-Skills Pay (ref_...) qui arrivera dans le webhook.
+    nouveau_paiement.reference = reponse.reference
+    nouveau_paiement.id_transaction = reponse.transaction_id
+    nouveau_paiement.statut = reponse.status or "PENDING"
+    nouveau_paiement.frais = Decimal(str(reponse.fee or 0))
+    nouveau_paiement.montant_net = Decimal(str(reponse.net_amount or montant))
     db.commit()
     db.refresh(nouveau_paiement)
     return nouveau_paiement
 
 
-def traiter_webhook(db: Session, payload: dict) -> dict:
+def traiter_webhook(db: Session, evenement_type: str, donnees: dict) -> dict:
     """
-    Traite la notification envoyée par HR-Skills Pay.
-    - SUCCESS → confirme la réservation + envoie une notification à l'utilisateur
-    - FAILED  → met à jour le statut seulement
-    Retourne toujours 200 pour éviter les re-tentatives inutiles de l'agrégateur.
-    """
-    reference = payload.get("reference")
-    nouveau_statut = payload.get("status")
+    Traite un événement HR-Skills Pay.
 
-    if nouveau_statut not in _STATUTS_WEBHOOK_VALIDES:
-        return {"message": "Statut inconnu, ignoré."}
+    IMPORTANT : la signature est DÉJÀ vérifiée par le routeur avant l'appel
+    de cette fonction. Ne jamais l'appeler avec des données non vérifiées.
+
+    - SUCCESS → confirme la réservation + notifie l'utilisateur et les admins
+    - FAILED  → la réservation reste en_attente (nouvelle tentative possible)
+    Retourne toujours un succès pour éviter les re-tentatives inutiles côté
+    HR-Skills Pay.
+    """
+    reference = donnees.get("reference")
+    if not reference:
+        return {"message": "Référence absente, ignorée."}
+
+    nouveau_statut = EVENEMENTS_STATUT.get(evenement_type) or donnees.get("status")
+    if not nouveau_statut:
+        return {"message": "Statut absent, ignoré."}
 
     paiement = db.query(Paiement).filter(Paiement.reference == reference).first()
     if not paiement:
         return {"message": "Référence inconnue, ignorée."}
 
+    # Idempotence : un webhook rejoué ne doit pas re-déclencher les effets
+    # (double confirmation, double notification)
+    if paiement.statut == nouveau_statut:
+        return {"message": "Webhook déjà traité."}
+
     paiement.statut = nouveau_statut
-    paiement.id_transaction = payload.get("transaction_id") or paiement.id_transaction
-    paiement.frais = Decimal(str(payload.get("fee", 0)))
-    paiement.montant_net = Decimal(str(payload.get("net_amount", paiement.montant)))
+    paiement.id_transaction = donnees.get("transaction_id") or paiement.id_transaction
+    if donnees.get("fee") is not None:
+        paiement.frais = Decimal(str(donnees["fee"]))
+    if donnees.get("net_amount") is not None:
+        paiement.montant_net = Decimal(str(donnees["net_amount"]))
 
     if nouveau_statut == "SUCCESS":
         reservation = confirmer_reservation(db, str(paiement.reservation_id))
-
-        utilisateur = db.query(Utilisateur).filter(
-            Utilisateur.id == paiement.utilisateur_id
-        ).first()
-
+        utilisateur = (
+            db.query(Utilisateur)
+            .filter(Utilisateur.id == paiement.utilisateur_id)
+            .first()
+        )
         if utilisateur:
             notifier_confirmation_reservation(
                 db,
@@ -229,6 +307,38 @@ def traiter_webhook(db: Session, payload: dict) -> dict:
 
     db.commit()
     return {"message": "Webhook traité avec succès."}
+
+
+def synchroniser_statut(db: Session, paiement_id: str) -> Paiement:
+    """
+    Filet de sécurité : interroge HR-Skills Pay pour rafraîchir le statut
+    d'un paiement PENDING, au cas où le webhook ne serait jamais arrivé.
+    """
+    paiement = db.query(Paiement).filter(Paiement.id == paiement_id).first()
+    if not paiement:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Paiement introuvable.",
+        )
+    if paiement.statut != "PENDING":
+        return paiement
+    if paiement.reference.startswith("tmp_"):
+        return paiement  # n'est jamais parvenu jusqu'à HR-Skills Pay
+
+    try:
+        transaction = client_partage().transactions.status(paiement.reference)
+    except HRPayError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Impossible de vérifier le statut : {e}",
+        )
+
+    donnees = transaction.model_dump()
+    statut_actuel = donnees.get("status")
+    if statut_actuel and statut_actuel != paiement.statut:
+        traiter_webhook(db, "", donnees)
+        db.refresh(paiement)
+    return paiement
 
 
 def lister_mes_paiements(db: Session, utilisateur_id: str) -> list[Paiement]:

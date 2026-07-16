@@ -1,9 +1,30 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.noyau.configuration import settings
+from app.noyau.taches import (
+    arreter_verification_paiements,
+    demarrer_verification_paiements,
+)
 
-app = FastAPI(title=settings.APP_NAME, description="API de réservation d'espaces de coworking", version="0.1.0")
+
+@asynccontextmanager
+async def cycle_de_vie(app: FastAPI):
+    # Démarrage
+    demarrer_verification_paiements()
+    yield
+    # Extinction
+    await arreter_verification_paiements()
+
+
+app = FastAPI(
+    title=settings.APP_NAME,
+    description="API de réservation d'espaces de coworking",
+    version="0.1.0",
+    lifespan=cycle_de_vie,
+)
 
 app.add_middleware(
     CORSMiddleware,

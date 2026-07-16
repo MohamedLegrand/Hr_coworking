@@ -113,6 +113,41 @@ def notifier_annulation_reservation(
     )
 
 
+def notifier_validation_documents(
+    db: Session,
+    utilisateur_id: str,
+    email_utilisateur: str,
+    statut: str,
+) -> None:
+    """Appelé par le module administration après validation/refus des documents KYC."""
+    if statut == "valide":
+        titre = "✅ Documents validés"
+        contenu = (
+            "Vos documents d'identification ont été validés. "
+            "Vous pouvez désormais finaliser le paiement de vos réservations."
+        )
+        type_notification = "document_valide"
+        sujet_email = "✅ Documents validés — HR Coworking"
+    else:
+        titre = "❌ Documents refusés"
+        contenu = (
+            "Vos documents d'identification ont été refusés. "
+            "Merci de les soumettre à nouveau depuis la page Paramètres de votre compte."
+        )
+        type_notification = "document_refuse"
+        sujet_email = "❌ Documents refusés — HR Coworking"
+
+    creer_notification(
+        db,
+        utilisateur_id=utilisateur_id,
+        type_notification=type_notification,
+        titre=titre,
+        contenu=contenu,
+        email_destinataire=email_utilisateur,
+        sujet_email=sujet_email,
+    )
+
+
 def notifier_reinitialisation_mot_de_passe(
     db: Session,
     utilisateur_id: str,

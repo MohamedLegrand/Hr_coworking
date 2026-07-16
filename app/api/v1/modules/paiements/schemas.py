@@ -13,10 +13,6 @@ from pydantic import BaseModel, model_validator
 class OperateurPaiement(str, Enum):
     mtn = "MTN"
     orange = "ORANGE"
-    carte = "CARTE"
-
-
-_OPERATEURS_MOBILE_MONEY = {OperateurPaiement.mtn, OperateurPaiement.orange}
 
 
 class StatutPaiement(str, Enum):
@@ -34,7 +30,7 @@ class PaiementInitiation(BaseModel):
 
     @model_validator(mode="after")
     def _valider_numero_telephone(self):
-        if self.operateur in _OPERATEURS_MOBILE_MONEY and not self.numero_telephone:
+        if not self.numero_telephone:
             raise ValueError("Le numéro de téléphone est obligatoire pour un paiement Mobile Money.")
         return self
 
